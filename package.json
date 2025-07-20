@@ -1,0 +1,29 @@
+{
+  "name": "clickup-time-tracker",
+  "version": "1.0.0",
+  "description": "Script per calcolare le ore tracciate su ClickUp in un intervallo temporale",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test.js",
+    "setup": "node setup.js",
+    "cron": "node cron-scheduler.js",
+    "debug": "DEBUG=true node index.js"
+  },
+  "packageManager": "pnpm",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "node-fetch": "^3.3.2",
+    "csv-writer": "^1.6.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.31.0"
+  },
+  "keywords": ["clickup", "time-tracking", "nodejs", "api"],
+  "author": "Lorenzo Morelli",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 

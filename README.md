@@ -1,0 +1,442 @@
+# ClickUp Time Tracker
+
+Script Node.js per calcolare le ore tracciate da un utente su ClickUp in un intervallo temporale specificato, con supporto per export JSON/CSV e schedulazione automatica.
+
+## 🚀 Funzionalità
+
+- ✅ **Calcolo ore totali** da tutte le time entries di un utente
+- ✅ **Gestione paginazione** automatica per grandi dataset
+- ✅ **Export multipli**: JSON e CSV
+- ✅ **Breakdown dettagliato** per giorno e task
+- ✅ **Rate limiting** intelligente con retry automatico
+- ✅ **Schedulazione cron** per automazione
+- ✅ **Validazione configurazione** completa
+- ✅ **Gestione errori** robusta con messaggi chiari
+
+## 📋 Requisiti
+
+- Node.js 18+ (per fetch nativo)
+- Personal API Token di ClickUp
+- Team ID e User ID del workspace
+
+## 🔧 Installazione
+
+```bash
+# Clona o scarica il progetto
+git clone <repository-url>
+cd clickup-time-tracker
+
+# Installa dipendenze
+npm install
+
+# Configura le variabili d'ambiente
+cp config.example.env .env
+# Modifica .env con i tuoi dati
+```
+
+## 🔑 Configurazione
+
+### 1. Ottieni il Personal API Token
+
+1. Vai su [ClickUp Settings > Apps](https://app.clickup.com/settings/apps)
+2. Scorri fino a "API Token"
+3. Clicca "Generate Token"
+4. Copia il token generato (inizia con `pk_`)
+
+### 2. Ottieni Team ID e User ID
+
+Usa lo script di setup automatico:
+
+```bash
+# Opzione 1: Con token nel .env
+echo "CLICKUP_TOKEN=pk_your_token_here" > .env
+node setup.js
+
+# Opzione 2: Con token come argomento
+node setup.js pk_your_token_here
+```
+
+Lo script mostrerà:
+- Le tue informazioni utente
+- Lista dei tuoi team/workspace
+- Membri del team selezionato
+- Contenuto del file .env da copiare
+
+### 3. Configura Date Range
+
+Nel file `.env`:
+
+```env
+# Per il mese corrente (default)
+START_DATE=1704067200000  # 1 gennaio 2024 00:00:00 UTC
+END_DATE=1706745599999    # 31 gennaio 2024 23:59:59 UTC
+
+# Oppure lascia vuoto per il mese corrente automatico
+START_DATE=
+END_DATE=
+```
+
+### 4. Configurazione Completa
+
+```env
+# ClickUp API Configuration
+CLICKUP_TOKEN=pk_your_token_here
+
+# Team and User IDs
+TEAM_ID=your_team_id
+USER_ID=your_user_id
+
+# Date range (timestamp in milliseconds)
+START_DATE=1704067200000
+END_DATE=1706745599999
+
+# Output options
+EXPORT_CSV=true
+OUTPUT_DIR=./reports
+```
+
+## 📊 Utilizzo
+
+### Esecuzione Base
+
+```bash
+# Esegui con configurazione da .env
+npm start
+
+# Oppure
+node index.js
+```
+
+### Esecuzione con Parametri Custom
+
+```bash
+# Con variabili d'ambiente inline
+CLICKUP_TOKEN=pk_xxx TEAM_ID=123 USER_ID=456 node index.js
+
+# Con debug abilitato
+DEBUG=true node index.js
+```
+
+### Output di Esempio
+
+```
+🚀 Avvio ClickUp Time Tracker...
+ℹ️  Recupero time entries per l'utente 456 dal 1 gennaio 2024, 01:00:00 al 31 gennaio 2024, 23:59:59
+ℹ️  Recuperate 50 time entries (pagina 1). Totale: 50
+✅ Recuperate 87 time entries totali
+
+============================================================
+📊 REPORT TEMPO TRACCIATO - CLICKUP
+============================================================
+📅 Periodo: 1 gennaio 2024, 01:00:00 - 31 gennaio 2024, 23:59:59
+👤 Utente: 456
+👥 Team: 123
+⏱️  Ore totali: 168.5h
+📝 Numero entries: 87
+🕐 Durata formattata: 168h 30m
+
+📈 BREAKDOWN GIORNALIERO:
+  Mon Jan 01 2024: 8.5h (4 entries)
+  Tue Jan 02 2024: 7.2h (3 entries)
+  Wed Jan 03 2024: 9.1h (5 entries)
+  ...
+
+📋 TOP TASK PER ORE:
+  1. Sviluppo Frontend: 45.2h (23 entries)
+  2. Code Review: 32.1h (15 entries)
+  3. Meeting: 28.7h (18 entries)
+  4. Bug Fix: 25.3h (12 entries)
+  5. Documentation: 18.9h (8 entries)
+  ...
+
+✅ Report JSON salvato: ./reports/time_report_2024-01-31.json
+✅ Report CSV salvato: ./reports/time_report_2024-01-31.csv
+✅ Elaborazione completata con successo!
+```
+
+## 📁 Struttura Output
+
+### JSON Output (`time_report_YYYY-MM-DD.json`)
+
+```json
+{
+  "totalHours": 168.5,
+  "totalDuration": 606600000,
+  "entriesCount": 87,
+  "summary": {
+    "formatted_duration": "168h 30m",
+    "period": {
+      "start": "1 gennaio 2024, 01:00:00",
+      "end": "31 gennaio 2024, 23:59:59"
+    },
+    "user_id": "456",
+    "team_id": "123"
+  },
+  "daily_breakdown": [
+    {
+      "date": "Mon Jan 01 2024",
+      "hours": 8.5,
+      "formatted_duration": "8h 30m",
+      "entries_count": 4
+    }
+  ],
+  "task_breakdown": [
+    {
+      "task_name": "Sviluppo Frontend",
+      "task_id": "task123",
+      "hours": 45.2,
+      "formatted_duration": "45h 12m",
+      "entries_count": 23
+    }
+  ],
+  "entriesList": [
+    {
+      "id": "entry123",
+      "description": "Implementazione feature X",
+      "duration": 7200000,
+      "start": 1704067200000,
+      "end": 1704074400000,
+      "task": {
+        "id": "task123",
+        "name": "Sviluppo Frontend",
+        "url": "https://app.clickup.com/t/task123"
+      },
+      "user": {
+        "id": "456",
+        "username": "john.doe",
+        "email": "john@example.com"
+      }
+    }
+  ]
+}
+```
+
+### CSV Output (`time_report_YYYY-MM-DD.csv`)
+
+```csv
+ID,Descrizione,Ore,Data Inizio,Data Fine,Task,Task ID,Utente
+entry123,Implementazione feature X,2.00,1 gennaio 2024 10:00:00,1 gennaio 2024 12:00:00,Sviluppo Frontend,task123,john.doe
+```
+
+## 🕐 Schedulazione Automatica
+
+### Setup Cron Job
+
+```bash
+# Mostra esempi di schedulazione
+node cron-scheduler.js examples
+
+# Installa cron job giornaliero alle 18:00
+node cron-scheduler.js install
+
+# Installa cron job personalizzato
+node cron-scheduler.js install "0 9 1 * *"  # Primo del mese alle 9:00
+
+# Test esecuzione
+node cron-scheduler.js test
+```
+
+### Esempi di Schedulazione
+
+| Scenario | Cron Expression | Descrizione |
+|----------|----------------|-------------|
+| Giornaliero | `0 18 * * *` | Ogni giorno alle 18:00 |
+| Settimanale | `0 17 * * 5` | Ogni venerdì alle 17:00 |
+| Mensile | `0 9 1 * *` | Primo del mese alle 9:00 |
+| Orario lavorativo | `0 9,13,17 * * 1-5` | Ogni 4 ore, lun-ven |
+
+### Monitoraggio
+
+```bash
+# Verifica cron jobs attivi
+crontab -l
+
+# Monitora log di esecuzione
+tail -f logs/cron_*.log
+
+# Rimuovi tutti i cron jobs
+crontab -r
+```
+
+## 🧪 Test
+
+```bash
+# Esegui tutti i test
+npm test
+
+# Test con debug
+DEBUG=true npm test
+
+# Test singolo
+node test.js
+```
+
+I test verificano:
+- Utility di date e validazione
+- Gestione file JSON/CSV
+- Connessione API (se configurata)
+- Performance delle funzioni
+- Integrazione completa (se configurata)
+
+## 🔍 Troubleshooting
+
+### Errori Comuni
+
+#### 🔑 Token non valido (401)
+```
+❌ HTTP 401: Invalid token
+```
+**Soluzione**: Verifica che il token inizi con `pk_` e sia valido in [ClickUp Settings](https://app.clickup.com/settings/apps)
+
+#### 🚫 Accesso negato (403)
+```
+❌ HTTP 403: Forbidden
+```
+**Soluzione**: Verifica che `TEAM_ID` e `USER_ID` siano corretti e che l'utente abbia accesso al team
+
+#### 📭 Risorsa non trovata (404)
+```
+❌ HTTP 404: Not Found
+```
+**Soluzione**: Controlla che `TEAM_ID` esista e che l'utente faccia parte del team
+
+#### ⏳ Rate limit superato (429)
+```
+❌ HTTP 429: Too Many Requests
+```
+**Soluzione**: Lo script gestisce automaticamente i rate limit. Attendi qualche minuto e riprova.
+
+#### 📅 Nessuna time entry trovata
+```
+⚠️  Nessuna time entry trovata per il periodo specificato
+```
+**Soluzione**: Verifica che `START_DATE` e `END_DATE` siano corretti e che esistano time entries nel periodo
+
+### Debug Mode
+
+```bash
+# Abilita log di debug
+DEBUG=true node index.js
+
+# Mostra chiamate API dettagliate
+DEBUG=true CLICKUP_TOKEN=pk_xxx node index.js
+```
+
+### Validazione Configurazione
+
+```bash
+# Verifica configurazione
+node -e "
+import { ValidationUtils } from './utils.js';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const config = {
+  CLICKUP_TOKEN: process.env.CLICKUP_TOKEN,
+  TEAM_ID: process.env.TEAM_ID,
+  USER_ID: process.env.USER_ID,
+  START_DATE: process.env.START_DATE || Date.now() - 86400000,
+  END_DATE: process.env.END_DATE || Date.now()
+};
+
+const validation = ValidationUtils.validateConfig(config);
+console.log('Validazione:', validation);
+"
+```
+
+## 📚 Documentazione API ClickUp
+
+### Endpoints Utilizzati
+
+- **[Get Time Entries](https://clickup.com/api/clickupreference/operation/GetTimeEntries/)**: `GET /api/v2/team/{team_id}/time_entries`
+- **[Get User Info](https://clickup.com/api/clickupreference/operation/GetAuthorizedUser/)**: `GET /api/v2/user`
+- **[Get Team Info](https://clickup.com/api/clickupreference/operation/GetTeams/)**: `GET /api/v2/team`
+
+### Autenticazione
+
+```http
+Authorization: pk_your_token_here
+Content-Type: application/json
+```
+
+### Parametri Time Entries
+
+| Parametro | Tipo | Descrizione |
+|-----------|------|-------------|
+| `team_id` | string | ID del team/workspace |
+| `start_date` | number | Timestamp inizio (millisecondi) |
+| `end_date` | number | Timestamp fine (millisecondi) |
+| `assignee` | string | ID dell'utente |
+| `page` | number | Numero pagina (default: 0) |
+| `page_size` | number | Elementi per pagina (max: 100) |
+
+### Rate Limits
+
+- **Rate Limit**: 100 richieste per minuto
+- **Burst Limit**: 1000 richieste per ora
+- **Gestione**: Retry automatico con backoff esponenziale
+
+### Limiti API
+
+1. **Paginazione**: Massimo 100 time entries per chiamata
+2. **Periodo**: Nessun limite ufficiale, ma performance migliori per periodi < 1 anno
+3. **Dati**: Time entries filtrabili solo per team, non per singolo progetto/task tramite API
+4. **Timestamp**: Deve essere in millisecondi UTC
+
+## 🛠️ Sviluppo
+
+### Struttura Progetto
+
+```
+clickup-time-tracker/
+├── index.js              # Script principale
+├── setup.js              # Setup automatico team/user ID
+├── utils.js               # Funzioni utility
+├── cron-scheduler.js      # Gestione schedulazione
+├── test.js                # Test suite
+├── package.json           # Configurazione Node.js
+├── config.example.env     # Esempio configurazione
+└── README.md             # Documentazione
+```
+
+### Estensioni
+
+Per estendere il progetto:
+
+1. **Nuovi export format**: Modifica `FileUtils.saveXXX()` in `utils.js`
+2. **Filtri aggiuntivi**: Aggiungi parametri in `getAllTimeEntries()`
+3. **Notifiche**: Integra webhook o email in `ClickUpTimeTracker.run()`
+4. **Dashboard**: Usa i dati JSON per creare visualizzazioni web
+
+### Contributi
+
+1. Fork del repository
+2. Crea feature branch: `git checkout -b feature/nuova-funzionalita`
+3. Commit: `git commit -m 'Aggiunge nuova funzionalità'`
+4. Push: `git push origin feature/nuova-funzionalita`
+5. Crea Pull Request
+
+## 📄 Licenza
+
+MIT License - vedi [LICENSE](LICENSE) per dettagli.
+
+## 🤝 Supporto
+
+- **Issues**: Apri un issue su GitHub
+- **Email**: Support via repository issues
+- **Wiki**: Documentazione estesa nel repository
+
+## 📝 Changelog
+
+### v1.0.0
+- ✅ Implementazione base con calcolo ore
+- ✅ Export JSON/CSV
+- ✅ Gestione paginazione
+- ✅ Rate limiting automatico
+- ✅ Schedulazione cron
+- ✅ Test suite completa
+- ✅ Documentazione completa
+
+---
+
+**Creato con ❤️ per automatizzare il tracking del tempo su ClickUp** 
