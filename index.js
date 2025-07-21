@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * ClickUp Time Tracker - Script principale
- * Calcola le ore tracciate da un utente in un intervallo temporale
+ * ClickUp Multi-Team Time Tracker
+ * Calcola le ore tracciate su più progetti per mese corrente e precedente
  */
 
 import dotenv from 'dotenv';
@@ -21,7 +21,7 @@ dotenv.config();
 const API_BASE = 'https://api.clickup.com/api/v2';
 const DEFAULT_PAGE_SIZE = 100;
 
-class ClickUpTimeTracker {
+class ClickUpMultiTeamTracker {
   constructor(config) {
     this.config = config;
     this.headers = {
@@ -51,14 +51,12 @@ class ClickUpTimeTracker {
   }
 
   /**
-   * Ottiene le time entries con paginazione automatica
+   * Ottiene le time entries per un singolo team
    */
-  async getAllTimeEntries(teamId, userId, startDate, endDate) {
+  async getTeamTimeEntries(teamId, userId, startDate, endDate) {
     let allEntries = [];
     let page = 0;
     let hasMore = true;
-
-    LoggerUtils.info(`Recupero time entries per l'utente ${userId} dal ${DateUtils.formatDate(startDate)} al ${DateUtils.formatDate(endDate)}`);
 
     while (hasMore) {
       try {
@@ -71,26 +69,14 @@ class ClickUpTimeTracker {
           page_size: DEFAULT_PAGE_SIZE.toString()
         });
 
-        LoggerUtils.debug(`Chiamata API: ${url}?${params}`);
-        LoggerUtils.debug(`Parametri: teamId=${teamId}, userId=${userId}, startDate=${startDate}, endDate=${endDate}`);
-        
         const response = await this.apiCall(`${url}?${params}`);
-        
-        // Debug response completa
-        LoggerUtils.debug('Response ricevuta:', JSON.stringify(response, null, 2));
-        
         const entries = response.data || [];
 
         if (entries.length === 0) {
           hasMore = false;
-          LoggerUtils.debug(`Nessuna entry trovata alla pagina ${page + 1}`);
         } else {
           allEntries = allEntries.concat(entries);
-          LoggerUtils.info(`Recuperate ${entries.length} time entries (pagina ${page + 1}). Totale: ${allEntries.length}`);
-          LoggerUtils.debug(`Prime 3 entries:`, JSON.stringify(entries.slice(0, 3), null, 2));
           page++;
-          
-          // Verifica se ci sono altre pagine
           hasMore = entries.length === DEFAULT_PAGE_SIZE;
         }
 
@@ -98,181 +84,241 @@ class ClickUpTimeTracker {
         await new Promise(resolve => setTimeout(resolve, 100));
 
       } catch (error) {
-        LoggerUtils.error(`Errore nel recupero della pagina ${page + 1}:`, error.message);
-        LoggerUtils.error('Dettagli errore:', error);
+        LoggerUtils.error(`Errore nel recupero entries per team ${teamId}:`, error.message);
         throw error;
       }
     }
 
-    LoggerUtils.success(`Recuperate ${allEntries.length} time entries totali`);
     return allEntries;
   }
 
   /**
-   * Elabora e calcola le statistiche delle time entries
+   * Calcola le ore totali da un array di time entries
    */
-  processTimeEntries(entries) {
-    let totalDuration = 0;
-    const processedEntries = [];
-
-    entries.forEach(entry => {
-      const duration = parseInt(entry.duration) || 0;
-      totalDuration += duration;
-
-      processedEntries.push({
-        id: entry.id,
-        description: entry.description || 'N/A',
-        duration: duration,
-        start: parseInt(entry.start),
-        end: parseInt(entry.end || entry.start),
-        task: entry.task ? {
-          id: entry.task.id,
-          name: entry.task.name,
-          url: entry.task.url
-        } : null,
-        user: entry.user ? {
-          id: entry.user.id,
-          username: entry.user.username,
-          email: entry.user.email
-        } : null,
-        created_at: entry.created_at,
-        updated_at: entry.updated_at
-      });
-    });
-
-    const totalHours = DateUtils.millisecondsToHours(totalDuration);
-
-    return {
-      totalHours,
-      totalDuration,
-      entriesCount: entries.length,
-      entriesList: processedEntries,
-      summary: {
-        formatted_duration: DateUtils.formatDuration(totalDuration),
-        period: {
-          start: DateUtils.formatDate(parseInt(this.config.START_DATE)),
-          end: DateUtils.formatDate(parseInt(this.config.END_DATE))
-        },
-        user_id: this.config.USER_ID,
-        team_id: this.config.TEAM_ID
-      }
-    };
+  calculateTotalHours(entries) {
+    const totalDuration = entries.reduce((sum, entry) => {
+      return sum + (parseInt(entry.duration) || 0);
+    }, 0);
+    return DateUtils.millisecondsToHours(totalDuration);
   }
 
   /**
-   * Genera statistiche aggiuntive
+   * Ottiene il nome di un team dall'API
    */
-  generateAdditionalStats(processedData) {
-    const { entriesList } = processedData;
-
-    // Raggruppa per giorno
-    const dailyStats = {};
-    entriesList.forEach(entry => {
-      const date = new Date(entry.start).toDateString();
-      if (!dailyStats[date]) {
-        dailyStats[date] = { duration: 0, count: 0 };
-      }
-      dailyStats[date].duration += entry.duration;
-      dailyStats[date].count++;
-    });
-
-    // Raggruppa per task
-    const taskStats = {};
-    entriesList.forEach(entry => {
-      const taskName = entry.task?.name || 'Senza task';
-      if (!taskStats[taskName]) {
-        taskStats[taskName] = { duration: 0, count: 0, task_id: entry.task?.id };
-      }
-      taskStats[taskName].duration += entry.duration;
-      taskStats[taskName].count++;
-    });
-
-    // Converti in array ordinati
-    const dailyReport = Object.entries(dailyStats)
-      .map(([date, stats]) => ({
-        date,
-        hours: DateUtils.millisecondsToHours(stats.duration),
-        formatted_duration: DateUtils.formatDuration(stats.duration),
-        entries_count: stats.count
-      }))
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    const taskReport = Object.entries(taskStats)
-      .map(([task, stats]) => ({
-        task_name: task,
-        task_id: stats.task_id,
-        hours: DateUtils.millisecondsToHours(stats.duration),
-        formatted_duration: DateUtils.formatDuration(stats.duration),
-        entries_count: stats.count
-      }))
-      .sort((a, b) => b.hours - a.hours);
-
-    return {
-      ...processedData,
-      daily_breakdown: dailyReport,
-      task_breakdown: taskReport
-    };
+  async getTeamName(teamId) {
+    try {
+      const response = await this.apiCall(`${API_BASE}/team`);
+      const team = response.teams?.find(t => t.id === teamId.toString());
+      return team ? team.name : `Team ${teamId}`;
+    } catch (error) {
+      LoggerUtils.debug(`Errore nel recupero nome team ${teamId}:`, error.message);
+      return `Team ${teamId}`;
+    }
   }
 
   /**
-   * Salva i report nei formati richiesti
+   * Genera report per tutti i team specificati
    */
-  async saveReports(data) {
-    const timestamp = new Date().toISOString().split('T')[0];
-    const startDate = new Date(parseInt(this.config.START_DATE));
-    const monthName = startDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }).replace(' ', '_');
+  async generateMultiTeamReport() {
+    const teams = this.config.TEAM_IDS;
+    const userId = this.config.USER_ID;
     
-    const jsonPath = path.join(this.outputDir, `time_report_${monthName}_${timestamp}.json`);
-    const csvPath = path.join(this.outputDir, `time_report_${monthName}_${timestamp}.csv`);
+    // Calcola i range di date
+    const dateRanges = this.getDateRanges();
+    
+    const results = {
+      user_id: userId,
+      period: {
+        current_month: dateRanges.currentMonth.name,
+        previous_month: dateRanges.previousMonth.name
+      },
+      teams: []
+    };
+
+    // Ottieni il nome utente
+    try {
+      const userResponse = await this.apiCall(`${API_BASE}/user`);
+      results.username = userResponse.user?.username || 'N/A';
+    } catch (error) {
+      results.username = 'N/A';
+    }
+
+    LoggerUtils.info(`📊 Analizzando ${teams.length} team per ${results.username}`);
+    LoggerUtils.info(`📅 Mese precedente: ${dateRanges.previousMonth.name}`);
+    LoggerUtils.info(`📅 Mese corrente: ${dateRanges.currentMonth.name}`);
+
+    // Per ogni team
+    for (const teamId of teams) {
+      try {
+        LoggerUtils.info(`\n🔍 Analizzando team ${teamId}...`);
+        
+        // Ottieni nome team
+        const teamName = await this.getTeamName(teamId);
+        
+        // Time entries mese precedente
+        const previousEntries = await this.getTeamTimeEntries(
+          teamId, userId, 
+          dateRanges.previousMonth.start, 
+          dateRanges.previousMonth.end
+        );
+        
+        // Time entries mese corrente
+        const currentEntries = await this.getTeamTimeEntries(
+          teamId, userId, 
+          dateRanges.currentMonth.start, 
+          dateRanges.currentMonth.end
+        );
+
+        const teamResult = {
+          team_id: teamId,
+          team_name: teamName,
+          previous_month: {
+            hours: this.calculateTotalHours(previousEntries),
+            entries_count: previousEntries.length,
+            period: `${DateUtils.formatDate(dateRanges.previousMonth.start)} - ${DateUtils.formatDate(dateRanges.previousMonth.end)}`
+          },
+          current_month: {
+            hours: this.calculateTotalHours(currentEntries),
+            entries_count: currentEntries.length,
+            period: `${DateUtils.formatDate(dateRanges.currentMonth.start)} - ${DateUtils.formatDate(dateRanges.currentMonth.end)}`
+          }
+        };
+
+        results.teams.push(teamResult);
+        
+        LoggerUtils.success(`✅ ${teamName}: ${teamResult.previous_month.hours}h (precedente) + ${teamResult.current_month.hours}h (corrente)`);
+
+      } catch (error) {
+        LoggerUtils.error(`❌ Errore per team ${teamId}:`, error.message);
+        
+        // Aggiungi comunque il team con errore
+        results.teams.push({
+          team_id: teamId,
+          team_name: `Team ${teamId} (errore)`,
+          error: error.message,
+          previous_month: { hours: 0, entries_count: 0 },
+          current_month: { hours: 0, entries_count: 0 }
+        });
+      }
+    }
+
+    // Calcola totali
+    results.totals = this.calculateTotals(results.teams);
+    
+    return results;
+  }
+
+  /**
+   * Calcola i totali generali
+   */
+  calculateTotals(teams) {
+    const totals = {
+      previous_month: { hours: 0, entries: 0 },
+      current_month: { hours: 0, entries: 0 }
+    };
+
+    teams.forEach(team => {
+      if (!team.error) {
+        totals.previous_month.hours += team.previous_month.hours;
+        totals.previous_month.entries += team.previous_month.entries_count;
+        totals.current_month.hours += team.current_month.hours;
+        totals.current_month.entries += team.current_month.entries_count;
+      }
+    });
+
+    return totals;
+  }
+
+  /**
+   * Calcola i range di date per mese corrente e precedente (CORRETTO)
+   */
+  getDateRanges() {
+    const now = new Date();
+    
+    // Mese corrente
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    
+    // Mese precedente (CORREZIONE: now.getMonth() - 1)
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    
+    return {
+      currentMonth: {
+        start: currentMonthStart.getTime(),
+        end: currentMonthEnd.getTime(),
+        name: currentMonthStart.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+      },
+      previousMonth: {
+        start: previousMonthStart.getTime(),
+        end: previousMonthEnd.getTime(),
+        name: previousMonthStart.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+      }
+    };
+  }
+
+  /**
+   * Stampa il summary pulito in console
+   */
+  printCleanSummary(data) {
+    console.log('\n' + '═'.repeat(80));
+    console.log('📊 CLICKUP TIME TRACKER - MULTI-TEAM REPORT');
+    console.log('═'.repeat(80));
+    
+    console.log(`👤 Utente: ${data.username} (ID: ${data.user_id})`);
+    console.log(`📅 Mese precedente: ${data.period.previous_month}`);
+    console.log(`📅 Mese corrente: ${data.period.current_month}`);
+    console.log('');
+
+    // Report per team
+    console.log('📋 ORE PER PROGETTO:');
+    console.log('─'.repeat(80));
+    
+    data.teams.forEach((team, index) => {
+      if (team.error) {
+        console.log(`❌ ${team.team_name}: ERRORE - ${team.error}`);
+      } else {
+        console.log(`${index + 1}. 🏢 ${team.team_name.toUpperCase()}`);
+        console.log(`   📊 Mese precedente: ${team.previous_month.hours}h (${team.previous_month.entries_count} entries)`);
+        console.log(`   📈 Mese corrente:   ${team.current_month.hours}h (${team.current_month.entries_count} entries)`);
+        
+        const diff = team.current_month.hours - team.previous_month.hours;
+        const diffText = diff > 0 ? `+${diff.toFixed(1)}h` : `${diff.toFixed(1)}h`;
+        const diffIcon = diff > 0 ? '📈' : diff < 0 ? '📉' : '➖';
+        console.log(`   ${diffIcon} Differenza: ${diffText}`);
+        console.log('');
+      }
+    });
+
+    // Totali generali
+    console.log('🏆 TOTALI GENERALI:');
+    console.log('─'.repeat(80));
+    console.log(`📊 Mese precedente: ${data.totals.previous_month.hours}h (${data.totals.previous_month.entries} entries totali)`);
+    console.log(`📈 Mese corrente:   ${data.totals.current_month.hours}h (${data.totals.current_month.entries} entries totali)`);
+    
+    const totalDiff = data.totals.current_month.hours - data.totals.previous_month.hours;
+    const totalDiffText = totalDiff > 0 ? `+${totalDiff.toFixed(1)}h` : `${totalDiff.toFixed(1)}h`;
+    const totalDiffIcon = totalDiff > 0 ? '📈' : totalDiff < 0 ? '📉' : '➖';
+    console.log(`${totalDiffIcon} Differenza totale: ${totalDiffText}`);
+    
+    console.log('\n' + '═'.repeat(80));
+  }
+
+  /**
+   * Salva il report in JSON
+   */
+  async saveReport(data) {
+    const timestamp = new Date().toISOString().split('T')[0];
+    const jsonPath = path.join(this.outputDir, `multi_team_report_${timestamp}.json`);
 
     try {
-      // Salva JSON
       FileUtils.saveJson(jsonPath, data);
-      LoggerUtils.success(`Report JSON salvato: ${jsonPath}`);
-
-      // Salva CSV se richiesto
-      if (this.config.EXPORT_CSV === 'true') {
-        await FileUtils.saveCsv(csvPath, data.entriesList);
-        LoggerUtils.success(`Report CSV salvato: ${csvPath}`);
-      }
-
-      return { jsonPath, csvPath };
+      LoggerUtils.success(`📁 Report JSON salvato: ${jsonPath}`);
+      return jsonPath;
     } catch (error) {
-      LoggerUtils.error('Errore nel salvataggio dei report:', error.message);
+      LoggerUtils.error('Errore nel salvataggio del report:', error.message);
       throw error;
     }
-  }
-
-  /**
-   * Stampa il summary in console
-   */
-  printSummary(data) {
-    console.log('\n' + '='.repeat(60));
-    console.log('📊 REPORT TEMPO TRACCIATO - CLICKUP');
-    console.log('='.repeat(60));
-    
-    console.log(`📅 Periodo: ${data.summary.period.start} - ${data.summary.period.end}`);
-    console.log(`👤 Utente: ${data.summary.user_id}`);
-    console.log(`👥 Team: ${data.summary.team_id}`);
-    console.log(`⏱️  Ore totali: ${data.totalHours}h`);
-    console.log(`📝 Numero entries: ${data.entriesCount}`);
-    console.log(`🕐 Durata formattata: ${data.summary.formatted_duration}`);
-
-    if (data.daily_breakdown && data.daily_breakdown.length > 0) {
-      console.log('\n📈 BREAKDOWN GIORNALIERO:');
-      data.daily_breakdown.forEach(day => {
-        console.log(`  ${day.date}: ${day.hours}h (${day.entries_count} entries)`);
-      });
-    }
-
-    if (data.task_breakdown && data.task_breakdown.length > 0) {
-      console.log('\n📋 TOP TASK PER ORE:');
-      data.task_breakdown.slice(0, 10).forEach((task, index) => {
-        console.log(`  ${index + 1}. ${task.task_name}: ${task.hours}h (${task.entries_count} entries)`);
-      });
-    }
-
-    console.log('\n' + '='.repeat(60));
   }
 
   /**
@@ -280,7 +326,7 @@ class ClickUpTimeTracker {
    */
   async run() {
     try {
-      LoggerUtils.info('🚀 Avvio ClickUp Time Tracker...');
+      LoggerUtils.info('🚀 Avvio ClickUp Multi-Team Tracker...');
 
       // Validazione configurazione
       const validation = ValidationUtils.validateConfig(this.config);
@@ -290,33 +336,19 @@ class ClickUpTimeTracker {
         process.exit(1);
       }
 
-      // Recupera le time entries
-      const timeEntries = await this.getAllTimeEntries(
-        this.config.TEAM_ID,
-        this.config.USER_ID,
-        parseInt(this.config.START_DATE),
-        parseInt(this.config.END_DATE)
-      );
+      // Genera report multi-team
+      const reportData = await this.generateMultiTeamReport();
 
-      if (timeEntries.length === 0) {
-        LoggerUtils.warning('Nessuna time entry trovata per il periodo specificato');
-        return;
-      }
-
-      // Elabora i dati
-      const processedData = this.processTimeEntries(timeEntries);
-      const finalData = this.generateAdditionalStats(processedData);
-
-      // Stampa summary
-      this.printSummary(finalData);
+      // Stampa summary pulito
+      this.printCleanSummary(reportData);
 
       // Salva report
-      const savedFiles = await this.saveReports(finalData);
+      if (this.config.SAVE_REPORT !== 'false') {
+        await this.saveReport(reportData);
+      }
       
-      LoggerUtils.success('✅ Elaborazione completata con successo!');
-      LoggerUtils.info(`📁 File salvati in: ${this.outputDir}`);
-
-      return finalData;
+      LoggerUtils.success('✅ Multi-team report completato!');
+      return reportData;
 
     } catch (error) {
       LoggerUtils.error('Errore durante l\'elaborazione:', error.message);
@@ -328,8 +360,6 @@ class ClickUpTimeTracker {
         LoggerUtils.error('🚫 Accesso negato. Verifica i permessi per team_id e user_id.');
       } else if (error.message.includes('404')) {
         LoggerUtils.error('📭 Risorsa non trovata. Verifica team_id e user_id.');
-      } else if (error.message.includes('429')) {
-        LoggerUtils.error('⏳ Rate limit superato. Riprova tra qualche minuto.');
       }
 
       process.exit(1);
@@ -337,116 +367,32 @@ class ClickUpTimeTracker {
   }
 }
 
-// Calcola i range per mese corrente e mese precedente
-function getMonthlyRanges() {
-  const now = new Date();
-  
-  // Mese corrente
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-  
-  // Mese precedente
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-  
-  return {
-    currentMonth: {
-      start: currentMonthStart.getTime(),
-      end: currentMonthEnd.getTime(),
-      name: currentMonthStart.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
-    },
-    lastMonth: {
-      start: lastMonthStart.getTime(),
-      end: lastMonthEnd.getTime(),
-      name: lastMonthStart.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
-    }
-  };
-}
-
-// Configurazione base da variabili d'ambiente
-const baseConfig = {
+/**
+ * Configurazione da variabili d'ambiente
+ */
+const config = {
   CLICKUP_TOKEN: process.env.CLICKUP_TOKEN,
-  TEAM_ID: process.env.TEAM_ID,
+  // Array di team IDs (Flip Alert + AMIX)
+  TEAM_IDS: process.env.TEAM_IDS ? 
+    process.env.TEAM_IDS.split(',').map(id => id.trim()) : 
+    ['90151008101', '90151008149'], // Default: Flip Alert + AMIX
   USER_ID: process.env.USER_ID,
-  EXPORT_CSV: process.env.EXPORT_CSV || 'true',
-  OUTPUT_DIR: process.env.OUTPUT_DIR || './reports'
+  OUTPUT_DIR: process.env.OUTPUT_DIR || './reports',
+  SAVE_REPORT: process.env.SAVE_REPORT || 'true'
 };
 
-// Funzione per eseguire report per entrambi i mesi
-async function runMonthlyReports() {
+/**
+ * Funzione principale
+ */
+async function runMultiTeamReport() {
   try {
-    LoggerUtils.info('🚀 Avvio ClickUp Time Tracker per mesi multipli...');
+    LoggerUtils.info('🚀 ClickUp Multi-Team Time Tracker');
+    LoggerUtils.info(`📋 Team configurati: ${config.TEAM_IDS.join(', ')}`);
     
-    // Se sono specificate date custom, usa quelle
-    if (process.env.START_DATE && process.env.END_DATE) {
-      const customConfig = {
-        ...baseConfig,
-        START_DATE: process.env.START_DATE,
-        END_DATE: process.env.END_DATE
-      };
-      
-      LoggerUtils.info('📅 Usando range di date personalizzato');
-      const tracker = new ClickUpTimeTracker(customConfig);
-      await tracker.run();
-      return;
-    }
+    const tracker = new ClickUpMultiTeamTracker(config);
+    const result = await tracker.run();
     
-    // Altrimenti genera report per mese corrente e precedente
-    const ranges = getMonthlyRanges();
-    
-    LoggerUtils.info('📅 Generando report per mese corrente e precedente...');
-    LoggerUtils.info(`📊 Mese corrente: ${ranges.currentMonth.name}`);
-    LoggerUtils.info(`📊 Mese precedente: ${ranges.lastMonth.name}`);
-    
-    // Report mese precedente
-    console.log('\n' + '═'.repeat(80));
-    console.log('📊 REPORT MESE PRECEDENTE: ' + ranges.lastMonth.name.toUpperCase());
-    console.log('═'.repeat(80));
-    
-    const lastMonthConfig = {
-      ...baseConfig,
-      START_DATE: ranges.lastMonth.start,
-      END_DATE: ranges.lastMonth.end
-    };
-    
-    const lastMonthTracker = new ClickUpTimeTracker(lastMonthConfig);
-    const lastMonthData = await lastMonthTracker.run();
-    
-    // Report mese corrente
-    console.log('\n' + '═'.repeat(80));
-    console.log('📊 REPORT MESE CORRENTE: ' + ranges.currentMonth.name.toUpperCase());
-    console.log('═'.repeat(80));
-    
-    const currentMonthConfig = {
-      ...baseConfig,
-      START_DATE: ranges.currentMonth.start,
-      END_DATE: ranges.currentMonth.end
-    };
-    
-    const currentMonthTracker = new ClickUpTimeTracker(currentMonthConfig);
-    const currentMonthData = await currentMonthTracker.run();
-    
-    // Summary finale
-    console.log('\n' + '═'.repeat(80));
-    console.log('📈 SUMMARY COMPARATIVO');
-    console.log('═'.repeat(80));
-    
-    const lastMonthHours = lastMonthData ? lastMonthData.totalHours : 0;
-    const currentMonthHours = currentMonthData ? currentMonthData.totalHours : 0;
-    
-    console.log(`📊 ${ranges.lastMonth.name}: ${lastMonthHours}h`);
-    console.log(`📊 ${ranges.currentMonth.name}: ${currentMonthHours}h`);
-    console.log(`📈 Differenza: ${(currentMonthHours - lastMonthHours).toFixed(2)}h`);
-    
-    if (currentMonthHours > lastMonthHours) {
-      console.log('✅ Più ore questo mese');
-    } else if (currentMonthHours < lastMonthHours) {
-      console.log('⚠️  Meno ore questo mese');
-    } else {
-      console.log('➖ Stesso numero di ore');
-    }
-    
-    console.log('═'.repeat(80));
+    return result;
     
   } catch (error) {
     LoggerUtils.error('Errore fatale:', error.message);
@@ -456,7 +402,7 @@ async function runMonthlyReports() {
 
 // Esecuzione se chiamato direttamente
 if (import.meta.url.startsWith('file://') && process.argv[1].endsWith('index.js')) {
-  runMonthlyReports();
+  runMultiTeamReport();
 }
 
-export default ClickUpTimeTracker; 
+export default ClickUpMultiTeamTracker; 

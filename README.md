@@ -1,123 +1,92 @@
-# ClickUp Time Tracker
+# ClickUp Multi-Team Time Tracker
 
-Script Node.js per calcolare le ore tracciate da un utente su ClickUp in un intervallo temporale specificato, con supporto per export JSON/CSV e schedulazione automatica.
+Script Node.js per calcolare e confrontare le ore tracciate da un utente su più team/progetti di ClickUp, analizzando il **mese corrente rispetto al mese precedente**.
 
 ## 🚀 Funzionalità
 
-- ✅ **Calcolo ore totali** da tutte le time entries di un utente
-- ✅ **Gestione paginazione** automatica per grandi dataset
-- ✅ **Export multipli**: JSON e CSV
-- ✅ **Breakdown dettagliato** per giorno e task
-- ✅ **Rate limiting** intelligente con retry automatico
-- ✅ **Schedulazione cron** per automazione
-- ✅ **Validazione configurazione** completa
-- ✅ **Gestione errori** robusta con messaggi chiari
+- ✅ **Confronto Mensile**: Calcola le ore totali per il mese corrente e quello precedente.
+- ✅ **Supporto Multi-Team**: Analizza più team/workspace in una singola esecuzione.
+- ✅ **Report Aggregato**: Fornisce totali per singolo team e un totale generale.
+- ✅ **Gestione Paginazione**: Recupera automaticamente tutte le time entries, anche se sono migliaia.
+- ✅ **Rate Limiting Intelligente**: Gestisce il limite di richieste API di ClickUp con retry automatico.
+- ✅ **Validazione Configurazione**: Controlla che le variabili d'ambiente siano corrette prima di iniziare.
+- ✅ **Export JSON**: Salva il report dettagliato in un file JSON.
+- ✅ **Report Pulito in Console**: Mostra un riepilogo chiaro e leggibile direttamente nel terminale.
 
 ## 📋 Requisiti
 
-- Node.js 18+ (per fetch nativo)
-- Personal API Token di ClickUp
-- Team ID e User ID del workspace
+- Node.js 18+
+- Un Personal API Token di ClickUp
+- Gli ID dei Team/Workspace da analizzare
+- L'ID dell'utente di cui tracciare le ore
 
 ## 🔧 Installazione
 
-```bash
-# Clona o scarica il progetto
-git clone <repository-url>
-cd clickup-time-tracker
+1.  **Clona il repository**
+    ```bash
+    git clone <repository-url>
+    cd clickup-multi-team-tracker
+    ```
 
-# Installa dipendenze
-npm install
+2.  **Installa le dipendenze**
+    ```bash
+    npm install
+    ```
 
-# Configura le variabili d'ambiente
-cp config.example.env .env
-# Modifica .env con i tuoi dati
-```
+3.  **Configura le variabili d'ambiente**
+    Copia il file di esempio e modificalo con i tuoi dati.
+    ```bash
+    cp config.example.env .env
+    ```
 
 ## 🔑 Configurazione
 
-### 1. Ottieni il Personal API Token
-
-1. Vai su [ClickUp Settings > Apps](https://app.clickup.com/settings/apps)
-2. Scorri fino a "API Token"
-3. Clicca "Generate Token"
-4. Copia il token generato (inizia con `pk_`)
-
-### 2. Ottieni Team ID e User ID
-
-Usa lo script di setup automatico:
+Modifica il file `.env` con i tuoi dati. Puoi ottenere `TEAM_ID` e `USER_ID` usando lo script `setup.js`.
 
 ```bash
-# Opzione 1: Con token nel .env
-echo "CLICKUP_TOKEN=pk_your_token_here" > .env
-node setup.js
-
-# Opzione 2: Con token come argomento
+# Esegui lo script di setup per trovare i tuoi ID
 node setup.js pk_your_token_here
 ```
 
-Lo script mostrerà:
-- Le tue informazioni utente
-- Lista dei tuoi team/workspace
-- Membri del team selezionato
-- Contenuto del file .env da copiare
-
-### 3. Configura Date Range
-
-Nel file `.env`:
-
-```env
-# Per il mese corrente (default)
-START_DATE=1704067200000  # 1 gennaio 2024 00:00:00 UTC
-END_DATE=1706745599999    # 31 gennaio 2024 23:59:59 UTC
-
-# Oppure lascia vuoto per il mese corrente automatico
-START_DATE=
-END_DATE=
-```
-
-### 4. Configurazione Completa
+### File `.env` Esempio
 
 ```env
 # ClickUp API Configuration
-CLICKUP_TOKEN=pk_your_token_here
+CLICKUP_TOKEN=pk_your_very_long_token_here
 
-# Team and User IDs
-TEAM_ID=your_team_id
-USER_ID=your_user_id
+# User ID da analizzare
+USER_ID=12345678
 
-# Date range (timestamp in milliseconds)
-START_DATE=1704067200000
-END_DATE=1706745599999
+# Lista di Team ID da analizzare, separati da virgola
+# Esempio: TEAM_IDS=90151008101,90151008149
+TEAM_IDS=your_team_id_1,your_team_id_2
 
-# Output options
-EXPORT_CSV=true
+# Opzioni di output
 OUTPUT_DIR=./reports
+SAVE_REPORT=true
 ```
 
 ## 📊 Utilizzo
 
 ### Esecuzione Base
 
-```bash
-# Esegui con configurazione da .env
-npm start
+Per eseguire lo script e generare il report per i team configurati nel file `.env`:
 
-# Oppure
+```bash
+npm start
+```
+
+Oppure direttamente con Node:
+
+```bash
 node index.js
 ```
 
-### Esecuzione con Parametri Custom
+### Esecuzione Semplificata (macOS/Linux)
 
-```bash
-# Con variabili d'ambiente inline
-CLICKUP_TOKEN=pk_xxx TEAM_ID=123 USER_ID=456 node index.js
+Dopo aver reso eseguibile lo script `run.sh` (`chmod +x run.sh`), puoi semplicemente fare doppio click su di esso.
 
-# Con debug abilitato
-DEBUG=true node index.js
-```
-
-### Output di Esempio
+### Output di Esempio in Console
 
 ```
 🚀 Avvio ClickUp Time Tracker...

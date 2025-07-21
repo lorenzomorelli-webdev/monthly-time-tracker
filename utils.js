@@ -170,7 +170,7 @@ export class ValidationUtils {
   }
 
   /**
-   * Valida la configurazione completa
+   * Valida la configurazione multi-team
    * @param {Object} config - Configurazione da validare
    * @returns {Object} Risultato validazione
    */
@@ -181,24 +181,19 @@ export class ValidationUtils {
       errors.push('Token ClickUp non valido (deve iniziare con pk_)');
     }
 
-    if (!this.isValidClickUpId(config.TEAM_ID)) {
-      errors.push('TEAM_ID non valido');
-    }
-
     if (!this.isValidClickUpId(config.USER_ID)) {
       errors.push('USER_ID non valido');
     }
 
-    if (!this.isValidTimestamp(config.START_DATE)) {
-      errors.push('START_DATE non valido');
-    }
-
-    if (!this.isValidTimestamp(config.END_DATE)) {
-      errors.push('END_DATE non valido');
-    }
-
-    if (config.START_DATE >= config.END_DATE) {
-      errors.push('START_DATE deve essere precedente a END_DATE');
+    // Valida array di team IDs
+    if (!config.TEAM_IDS || !Array.isArray(config.TEAM_IDS) || config.TEAM_IDS.length === 0) {
+      errors.push('TEAM_IDS deve essere un array non vuoto');
+    } else {
+      // Valida ogni team ID nell'array
+      const invalidTeamIds = config.TEAM_IDS.filter(teamId => !this.isValidClickUpId(teamId));
+      if (invalidTeamIds.length > 0) {
+        errors.push(`Team IDs non validi: ${invalidTeamIds.join(', ')}`);
+      }
     }
 
     return {
