@@ -2,9 +2,9 @@
  * Utility functions per il time tracker ClickUp
  */
 
+import { createObjectCsvWriter } from 'csv-writer';
 import fs from 'fs';
 import path from 'path';
-import { createObjectCsvWriter } from 'csv-writer';
 
 export class DateUtils {
   /**
@@ -67,12 +67,29 @@ export class DateUtils {
   }
 
   /**
+   * Formatta i millisecondi in una stringa di ore e minuti (es. "10h 30m")
+   * @param {number} milliseconds - Millisecondi da formattare
+   * @returns {string} Stringa formattata
+   */
+  static formatMilliseconds(milliseconds) {
+    if (isNaN(milliseconds) || milliseconds < 0) {
+      return '0h 0m';
+    }
+    const totalMinutes = Math.floor(milliseconds / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}h ${minutes}m`;
+  }
+
+  /**
    * Converte millisecondi in ore decimali
    * @param {number} milliseconds - Millisecondi
    * @returns {number} Ore con 2 decimali
    */
   static millisecondsToHours(milliseconds) {
-    return Math.round((milliseconds / (1000 * 60 * 60)) * 100) / 100;
+    if (isNaN(milliseconds)) return 0;
+    const hours = milliseconds / 3600000;
+    return parseFloat(hours.toFixed(2));
   }
 }
 
@@ -156,7 +173,7 @@ export class ValidationUtils {
     const now = Date.now();
     const twoYearsFromNow = now + (2 * 365 * 24 * 60 * 60 * 1000); // 2 anni nel futuro
     const fiveYearsAgo = now - (5 * 365 * 24 * 60 * 60 * 1000); // 5 anni nel passato
-    
+
     return !isNaN(ts) && ts > 0 && ts >= fiveYearsAgo && ts <= twoYearsFromNow;
   }
 
@@ -217,7 +234,7 @@ export class RateLimitUtils {
 
     const delay = Math.min(1000 * Math.pow(2, attempt), 30000); // Max 30 secondi
     console.log(`⏳ Rate limit raggiunto. Attesa di ${delay}ms prima del tentativo ${attempt + 1}/${maxAttempts}`);
-    
+
     return new Promise(resolve => setTimeout(resolve, delay));
   }
 
@@ -235,12 +252,12 @@ export class RateLimitUtils {
         return await apiCall();
       } catch (error) {
         lastError = error;
-        
+
         if (error.message.includes('429') || error.message.includes('rate limit')) {
           await this.exponentialBackoff(attempt, maxAttempts);
           continue;
         }
-        
+
         // Se non è un errore di rate limit, rilancia subito
         throw error;
       }
