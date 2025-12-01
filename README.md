@@ -2,11 +2,15 @@
 
 Script Node.js per calcolare e confrontare le ore tracciate da un utente su più team/progetti di ClickUp, analizzando il **mese corrente rispetto al mese precedente**.
 
+Perfetto per freelancer e consulenti che gestiscono più progetti e hanno bisogno di sapere esattamente quanto fatturare per ogni cliente.
+
 ## 🚀 Funzionalità
 
 - ✅ **Confronto Mensile**: Calcola le ore totali per il mese corrente e quello precedente.
+- ✅ **Fatturazione Intelligente**: Mostra i fatturati per entrambi i mesi con una sezione dedicata "DA FATTURARE" per il mese precedente.
 - ✅ **Supporto Multi-Team**: Analizza più team/workspace in una singola esecuzione.
-- ✅ **Report Aggregato**: Fornisce totali per singolo team e un totale generale.
+- ✅ **Report Visivo Migliorato**: Layout con box Unicode per una lettura immediata delle informazioni.
+- ✅ **Report Aggregato**: Fornisce totali per singolo team e un totale generale con differenze in ore ed euro.
 - ✅ **Gestione Paginazione**: Recupera automaticamente tutte le time entries, anche se sono migliaia.
 - ✅ **Rate Limiting Intelligente**: Gestisce il limite di richieste API di ClickUp con retry automatico.
 - ✅ **Validazione Configurazione**: Controlla che le variabili d'ambiente siano corrette prima di iniziare.
@@ -58,8 +62,10 @@ CLICKUP_TOKEN=pk_your_very_long_token_here
 USER_ID=12345678
 
 # Lista di Team ID da analizzare, separati da virgola
-# Esempio: TEAM_IDS=90151008101,90151008149
 TEAM_IDS=your_team_id_1,your_team_id_2
+
+# Tariffa oraria per calcolare i fatturati (opzionale, default: 0)
+HOURLY_RATE=25
 
 # Opzioni di output
 OUTPUT_DIR=./reports
@@ -89,39 +95,69 @@ Dopo aver reso eseguibile lo script `run.sh` (`chmod +x run.sh`), puoi semplicem
 ### Output di Esempio in Console
 
 ```
-🚀 Avvio ClickUp Time Tracker...
-ℹ️  Recupero time entries per l'utente 456 dal 1 gennaio 2024, 01:00:00 al 31 gennaio 2024, 23:59:59
-ℹ️  Recuperate 50 time entries (pagina 1). Totale: 50
-✅ Recuperate 87 time entries totali
+══════════════════════════════════════════════════════════════════════════════════════════
+                    📊 CLICKUP TIME TRACKER - REPORT MENSILE
+══════════════════════════════════════════════════════════════════════════════════════════
+👤 mario rossi (ID: 12345678)
+📅 novembre 2024 vs dicembre 2024
 
-============================================================
-📊 REPORT TEMPO TRACCIATO - CLICKUP
-============================================================
-📅 Periodo: 1 gennaio 2024, 01:00:00 - 31 gennaio 2024, 23:59:59
-👤 Utente: 456
-👥 Team: 123
-⏱️  Ore totali: 168.5h
-📝 Numero entries: 87
-🕐 Durata formattata: 168h 30m
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ 🏢 CLIENTE A                                                                           │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│   📅 novembre 2024: 105h 30m  (157 entries)             →  €   2637.50                   │
+│   📅 dicembre 2024: 15h 45m   ( 24 entries)             →  €    393.75                   │
+│   📉 Differenza: -89.8h                                 →    -€2243.75                     │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 
-📈 BREAKDOWN GIORNALIERO:
-  Mon Jan 01 2024: 8.5h (4 entries)
-  Tue Jan 02 2024: 7.2h (3 entries)
-  Wed Jan 03 2024: 9.1h (5 entries)
-  ...
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ 🏢 CLIENTE B                                                                           │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│   📅 novembre 2024: 42h 15m   ( 68 entries)             →  €   1056.25                   │
+│   📅 dicembre 2024: 38h 30m   ( 61 entries)             →  €    962.50                   │
+│   📉 Differenza: -3.8h                                  →      -€93.75                     │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 
-📋 TOP TASK PER ORE:
-  1. Sviluppo Frontend: 45.2h (23 entries)
-  2. Code Review: 32.1h (15 entries)
-  3. Meeting: 28.7h (18 entries)
-  4. Bug Fix: 25.3h (12 entries)
-  5. Documentation: 18.9h (8 entries)
-  ...
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ 🏆 TOTALI GENERALI                                                                     │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│   📅 novembre 2024: 147h 45m  (225 entries)             →  €   3693.75                   │
+│   📅 dicembre 2024: 54h 15m   ( 85 entries)             →  €   1356.25                   │
+│   📉 Differenza: -93.5h                                 →    -€2337.50                     │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 
-✅ Report JSON salvato: ./reports/time_report_2024-01-31.json
-✅ Report CSV salvato: ./reports/time_report_2024-01-31.csv
-✅ Elaborazione completata con successo!
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 💰 DA FATTURARE - NOVEMBRE 2024                                                          ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+  • Cliente A:                 €   2637.50  (105h 30m)
+  • Cliente B:                 €   1056.25  (42h 15m)
+  ──────────────────────────────────────────────────
+  💶 TOTALE DA FATTURARE:        €   3693.75
+
+══════════════════════════════════════════════════════════════════════════════════════════
+✅ Report JSON salvato: reports/multi_team_report_2024-12-01.json
+✅ Multi-team report completato!
 ```
+
+## 💰 Funzionalità Fatturazione
+
+Lo strumento calcola automaticamente i fatturati in base alla tariffa oraria configurata in `HOURLY_RATE`.
+
+### Come Funziona
+
+1. **Configura la tariffa**: Imposta `HOURLY_RATE` nel file `.env` (es. `HOURLY_RATE="25"` per €25/ora)
+2. **Esegui il tracker**: I fatturati vengono calcolati automaticamente per ogni progetto
+3. **Visualizza i risultati**: La sezione **"DA FATTURARE"** mostra chiaramente quanto fatturare per il mese precedente
+
+### Informazioni Mostrate
+
+- **Fatturati per progetto**: Ore e importo per ogni team/cliente
+- **Fatturato totale**: Somma di tutti i progetti
+- **Confronto mensile**: Fatturati del mese corrente vs precedente con differenze
+- **Sezione DA FATTURARE**: Evidenzia gli importi da fatturare per il mese precedente (quello completato)
+
+### Disabilitare i Calcoli di Fatturato
+
+Se vuoi vedere solo le ore senza i calcoli economici, imposta `HOURLY_RATE="0"` o rimuovi la variabile dal file `.env`.
 
 ## 📁 Struttura Output
 

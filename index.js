@@ -470,10 +470,10 @@ class ClickUpMultiTeamTracker {
  */
 const config = {
   CLICKUP_TOKEN: process.env.CLICKUP_TOKEN,
-  // Array di team IDs (Flip Alert + AMIX)
+  // Array di team IDs
   TEAM_IDS: process.env.TEAM_IDS ?
     process.env.TEAM_IDS.split(',').map(id => id.trim()) :
-    ['90151008101', '90151008149'], // Default: Flip Alert + AMIX
+    [],
   USER_ID: process.env.USER_ID,
   OUTPUT_DIR: process.env.OUTPUT_DIR || './reports',
   SAVE_REPORT: process.env.SAVE_REPORT || 'true',
