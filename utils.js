@@ -202,6 +202,10 @@ export class ValidationUtils {
       errors.push('USER_ID non valido');
     }
 
+    if (isNaN(parseFloat(config.HOURLY_RATE)) || parseFloat(config.HOURLY_RATE) < 0) {
+      errors.push('HOURLY_RATE non è un numero valido o è negativo.');
+    }
+
     // Valida array di team IDs
     if (!config.TEAM_IDS || !Array.isArray(config.TEAM_IDS) || config.TEAM_IDS.length === 0) {
       errors.push('TEAM_IDS deve essere un array non vuoto');

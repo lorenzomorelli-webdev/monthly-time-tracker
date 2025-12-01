@@ -127,6 +127,7 @@ class ClickUpMultiTeamTracker {
   async generateMultiTeamReport() {
     const teams = this.config.TEAM_IDS;
     const userId = this.config.USER_ID;
+    const hourlyRate = parseFloat(this.config.HOURLY_RATE);
 
     // Calcola i range di date
     const dateRanges = this.getDateRanges();
@@ -174,20 +175,25 @@ class ClickUpMultiTeamTracker {
           dateRanges.currentMonth.end
         );
 
+        const previousMonthMetrics = this.calculateTotalHours(previousEntries);
+        const currentMonthMetrics = this.calculateTotalHours(currentEntries);
+
         const teamResult = {
           team_id: teamId,
           team_name: teamName,
           previous_month: {
-            hours: this.calculateTotalHours(previousEntries).decimal,
-            hours_formatted: this.calculateTotalHours(previousEntries).formatted,
+            hours: previousMonthMetrics.decimal,
+            hours_formatted: previousMonthMetrics.formatted,
             entries_count: previousEntries.length,
-            period: `${DateUtils.formatDate(dateRanges.previousMonth.start)} - ${DateUtils.formatDate(dateRanges.previousMonth.end)}`
+            period: `${DateUtils.formatDate(dateRanges.previousMonth.start)} - ${DateUtils.formatDate(dateRanges.previousMonth.end)}`,
+            earnings: previousMonthMetrics.decimal * hourlyRate
           },
           current_month: {
-            hours: this.calculateTotalHours(currentEntries).decimal,
-            hours_formatted: this.calculateTotalHours(currentEntries).formatted,
+            hours: currentMonthMetrics.decimal,
+            hours_formatted: currentMonthMetrics.formatted,
             entries_count: currentEntries.length,
-            period: `${DateUtils.formatDate(dateRanges.currentMonth.start)} - ${DateUtils.formatDate(dateRanges.currentMonth.end)}`
+            period: `${DateUtils.formatDate(dateRanges.currentMonth.start)} - ${DateUtils.formatDate(dateRanges.currentMonth.end)}`,
+            earnings: currentMonthMetrics.decimal * hourlyRate
           }
         };
 
@@ -220,22 +226,26 @@ class ClickUpMultiTeamTracker {
    */
   calculateTotals(teams) {
     const totals = {
-      previous_month: { hours: 0, entries: 0, milliseconds: 0 },
-      current_month: { hours: 0, entries: 0, milliseconds: 0 }
+      previous_month: { hours: 0, entries: 0, milliseconds: 0, earnings: 0 },
+      current_month: { hours: 0, entries: 0, milliseconds: 0, earnings: 0 }
     };
 
     teams.forEach(team => {
       if (!team.error) {
         totals.previous_month.hours += team.previous_month.hours;
         totals.previous_month.entries += team.previous_month.entries_count;
+        totals.previous_month.earnings += team.previous_month.earnings;
         totals.current_month.hours += team.current_month.hours;
         totals.current_month.entries += team.current_month.entries_count;
+        totals.current_month.earnings += team.current_month.earnings;
       }
     });
 
     // Arrotonda i totali per evitare problemi di floating point
     totals.previous_month.hours = parseFloat(totals.previous_month.hours.toFixed(2));
     totals.current_month.hours = parseFloat(totals.current_month.hours.toFixed(2));
+    totals.previous_month.earnings = parseFloat(totals.previous_month.earnings.toFixed(2));
+    totals.current_month.earnings = parseFloat(totals.current_month.earnings.toFixed(2));
 
     return totals;
   }
@@ -272,51 +282,124 @@ class ClickUpMultiTeamTracker {
    * Stampa il summary pulito in console
    */
   printCleanSummary(data) {
-    console.log('\n' + '═'.repeat(80));
-    console.log('📊 CLICKUP TIME TRACKER - MULTI-TEAM REPORT');
-    console.log('═'.repeat(80));
+    const hasHourlyRate = parseFloat(this.config.HOURLY_RATE) > 0;
 
-    console.log(`👤 Utente: ${data.username} (ID: ${data.user_id})`);
-    console.log(`📅 Mese precedente: ${data.period.previous_month}`);
-    console.log(`📅 Mese corrente: ${data.period.current_month}`);
+    console.log('\n' + '═'.repeat(90));
+    console.log('                    📊 CLICKUP TIME TRACKER - REPORT MENSILE');
+    console.log('═'.repeat(90));
+    console.log(`👤 ${data.username} (ID: ${data.user_id})`);
+    console.log(`📅 ${data.period.previous_month} vs ${data.period.current_month}`);
     console.log('');
 
-    // Report per team
-    console.log('📋 ORE PER PROGETTO:');
-    console.log('─'.repeat(80));
-
+    // Sezione progetti con ore e fatturati
     data.teams.forEach((team, index) => {
       if (team.error) {
-        console.log(`❌ ${team.team_name}: ERRORE - ${team.error}`);
+        console.log('┌' + '─'.repeat(88) + '┐');
+        console.log(`│ ❌ ${team.team_name.padEnd(84)} │`);
+        console.log(`│    ERRORE: ${team.error.padEnd(77)} │`);
+        console.log('└' + '─'.repeat(88) + '┘');
       } else {
-        console.log(`${index + 1}. 🏢 ${team.team_name.toUpperCase()}`);
-        console.log(`   📊 Mese precedente: ${team.previous_month.hours_formatted} (${team.previous_month.entries_count} entries)`);
-        console.log(`   📈 Mese corrente:   ${team.current_month.hours_formatted} (${team.current_month.entries_count} entries)`);
+        console.log('┌' + '─'.repeat(88) + '┐');
+        console.log(`│ 🏢 ${team.team_name.toUpperCase().padEnd(84)} │`);
+        console.log('├' + '─'.repeat(88) + '┤');
 
+        // Mese precedente
+        const prevLine = `  📅 ${data.period.previous_month}: ${team.previous_month.hours_formatted.padEnd(9)} (${String(team.previous_month.entries_count).padStart(3)} entries)`;
+        if (hasHourlyRate) {
+          const prevEarnings = `→  €${team.previous_month.earnings.toFixed(2).padStart(10)}`;
+          console.log(`│ ${prevLine.padEnd(56)}${prevEarnings.padEnd(32)} │`);
+        } else {
+          console.log(`│ ${prevLine.padEnd(86)} │`);
+        }
+
+        // Mese corrente
+        const currLine = `  📅 ${data.period.current_month}: ${team.current_month.hours_formatted.padEnd(9)} (${String(team.current_month.entries_count).padStart(3)} entries)`;
+        if (hasHourlyRate) {
+          const currEarnings = `→  €${team.current_month.earnings.toFixed(2).padStart(10)}`;
+          console.log(`│ ${currLine.padEnd(56)}${currEarnings.padEnd(32)} │`);
+        } else {
+          console.log(`│ ${currLine.padEnd(86)} │`);
+        }
+
+        // Differenza
         const diff = team.current_month.hours - team.previous_month.hours;
         const diffText = diff >= 0 ? `+${diff.toFixed(1)}h` : `${diff.toFixed(1)}h`;
         const diffIcon = diff > 0 ? '📈' : diff < 0 ? '📉' : '➖';
-        console.log(`   ${diffIcon} Differenza: ${diffText} (decimale)`);
-        console.log('');
+        const diffLine = `  ${diffIcon} Differenza: ${diffText.padEnd(12)}`;
+
+        if (hasHourlyRate) {
+          const diffEarnings = team.current_month.earnings - team.previous_month.earnings;
+          const diffEarningsText = diffEarnings >= 0 ? `+€${diffEarnings.toFixed(2)}` : `-€${Math.abs(diffEarnings).toFixed(2)}`;
+          console.log(`│ ${diffLine.padEnd(56)}→  ${diffEarningsText.padStart(12).padEnd(32)} │`);
+        } else {
+          console.log(`│ ${diffLine.padEnd(86)} │`);
+        }
+
+        console.log('└' + '─'.repeat(88) + '┘');
       }
+      console.log('');
     });
 
-    // Calcola i totali formattati
+    // Totali generali
     const previousTotalMs = data.teams.reduce((sum, team) => sum + (team.previous_month.hours * 3600000 || 0), 0);
     const currentTotalMs = data.teams.reduce((sum, team) => sum + (team.current_month.hours * 3600000 || 0), 0);
 
-    // Totali generali
-    console.log('🏆 TOTALI GENERALI:');
-    console.log('─'.repeat(80));
-    console.log(`📊 Mese precedente: ${DateUtils.formatMilliseconds(previousTotalMs)} (${data.totals.previous_month.entries} entries totali)`);
-    console.log(`📈 Mese corrente:   ${DateUtils.formatMilliseconds(currentTotalMs)} (${data.totals.current_month.entries} entries totali)`);
+    console.log('┌' + '─'.repeat(88) + '┐');
+    console.log(`│ 🏆 TOTALI GENERALI${' '.repeat(68)} │`);
+    console.log('├' + '─'.repeat(88) + '┤');
+
+    const prevTotalLine = `  📅 ${data.period.previous_month}: ${DateUtils.formatMilliseconds(previousTotalMs).padEnd(9)} (${String(data.totals.previous_month.entries).padStart(3)} entries)`;
+    if (hasHourlyRate) {
+      const prevTotalEarnings = `→  €${data.totals.previous_month.earnings.toFixed(2).padStart(10)}`;
+      console.log(`│ ${prevTotalLine.padEnd(56)}${prevTotalEarnings.padEnd(32)} │`);
+    } else {
+      console.log(`│ ${prevTotalLine.padEnd(86)} │`);
+    }
+
+    const currTotalLine = `  📅 ${data.period.current_month}: ${DateUtils.formatMilliseconds(currentTotalMs).padEnd(9)} (${String(data.totals.current_month.entries).padStart(3)} entries)`;
+    if (hasHourlyRate) {
+      const currTotalEarnings = `→  €${data.totals.current_month.earnings.toFixed(2).padStart(10)}`;
+      console.log(`│ ${currTotalLine.padEnd(56)}${currTotalEarnings.padEnd(32)} │`);
+    } else {
+      console.log(`│ ${currTotalLine.padEnd(86)} │`);
+    }
 
     const totalDiff = data.totals.current_month.hours - data.totals.previous_month.hours;
     const totalDiffText = totalDiff >= 0 ? `+${totalDiff.toFixed(1)}h` : `${totalDiff.toFixed(1)}h`;
     const totalDiffIcon = totalDiff > 0 ? '📈' : totalDiff < 0 ? '📉' : '➖';
-    console.log(`${totalDiffIcon} Differenza totale: ${totalDiffText} (decimale)`);
+    const totalDiffLine = `  ${totalDiffIcon} Differenza: ${totalDiffText.padEnd(12)}`;
 
-    console.log('\n' + '═'.repeat(80));
+    if (hasHourlyRate) {
+      const totalDiffEarnings = data.totals.current_month.earnings - data.totals.previous_month.earnings;
+      const totalDiffEarningsText = totalDiffEarnings >= 0 ? `+€${totalDiffEarnings.toFixed(2)}` : `-€${Math.abs(totalDiffEarnings).toFixed(2)}`;
+      console.log(`│ ${totalDiffLine.padEnd(56)}→  ${totalDiffEarningsText.padStart(12).padEnd(32)} │`);
+    } else {
+      console.log(`│ ${totalDiffLine.padEnd(86)} │`);
+    }
+
+    console.log('└' + '─'.repeat(88) + '┘');
+
+    // Sezione DA FATTURARE (mese precedente) - LA PIÙ IMPORTANTE
+    if (hasHourlyRate) {
+      console.log('\n' + '┏' + '━'.repeat(88) + '┓');
+      console.log(`┃ 💰 DA FATTURARE - ${data.period.previous_month.toUpperCase()}${' '.repeat(88 - 18 - data.period.previous_month.length)} ┃`);
+      console.log('┗' + '━'.repeat(88) + '┛');
+
+      data.teams.forEach((team) => {
+        if (!team.error) {
+          const teamLine = `  • ${team.team_name}:`;
+          const amount = `€${team.previous_month.earnings.toFixed(2).padStart(10)}`;
+          const hours = `(${team.previous_month.hours_formatted})`;
+          console.log(`${teamLine.padEnd(30)} ${amount}  ${hours}`);
+        }
+      });
+
+      console.log('  ' + '─'.repeat(50));
+      console.log(`  💶 TOTALE DA FATTURARE:        €${data.totals.previous_month.earnings.toFixed(2).padStart(10)}`);
+      console.log('');
+    }
+
+    console.log('═'.repeat(90));
   }
 
   /**
@@ -393,7 +476,8 @@ const config = {
     ['90151008101', '90151008149'], // Default: Flip Alert + AMIX
   USER_ID: process.env.USER_ID,
   OUTPUT_DIR: process.env.OUTPUT_DIR || './reports',
-  SAVE_REPORT: process.env.SAVE_REPORT || 'true'
+  SAVE_REPORT: process.env.SAVE_REPORT || 'true',
+  HOURLY_RATE: process.env.HOURLY_RATE || '0'
 };
 
 /**
