@@ -186,14 +186,16 @@ class ClickUpMultiTeamTracker {
             hours_formatted: previousMonthMetrics.formatted,
             entries_count: previousEntries.length,
             period: `${DateUtils.formatDate(dateRanges.previousMonth.start)} - ${DateUtils.formatDate(dateRanges.previousMonth.end)}`,
-            earnings: previousMonthMetrics.decimal * hourlyRate
+            earnings: previousMonthMetrics.decimal * hourlyRate,
+            entries: previousEntries
           },
           current_month: {
             hours: currentMonthMetrics.decimal,
             hours_formatted: currentMonthMetrics.formatted,
             entries_count: currentEntries.length,
             period: `${DateUtils.formatDate(dateRanges.currentMonth.start)} - ${DateUtils.formatDate(dateRanges.currentMonth.end)}`,
-            earnings: currentMonthMetrics.decimal * hourlyRate
+            earnings: currentMonthMetrics.decimal * hourlyRate,
+            entries: currentEntries
           }
         };
 
@@ -248,6 +250,45 @@ class ClickUpMultiTeamTracker {
     totals.current_month.earnings = parseFloat(totals.current_month.earnings.toFixed(2));
 
     return totals;
+  }
+
+  /**
+   * Aggrega le ore per giorno da tutte le entries di tutti i team
+   */
+  calculateHoursByDay(teams, monthKey) {
+    const hoursByDay = {};
+
+    teams.forEach(team => {
+      if (!team.error && team[monthKey]?.entries) {
+        team[monthKey].entries.forEach(entry => {
+          const startTimestamp = parseInt(entry.start);
+          const date = new Date(startTimestamp);
+          const dateKey = date.toLocaleDateString('it-IT', {
+            weekday: 'short',
+            day: '2-digit',
+            month: '2-digit'
+          });
+          const sortKey = date.toISOString().split('T')[0]; // Per ordinamento
+
+          if (!hoursByDay[sortKey]) {
+            hoursByDay[sortKey] = {
+              dateKey,
+              milliseconds: 0
+            };
+          }
+          hoursByDay[sortKey].milliseconds += parseInt(entry.duration) || 0;
+        });
+      }
+    });
+
+    // Ordina per data e restituisci array
+    return Object.entries(hoursByDay)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([sortKey, data]) => ({
+        date: data.dateKey,
+        hours: DateUtils.millisecondsToHours(data.milliseconds),
+        formatted: DateUtils.formatMilliseconds(data.milliseconds)
+      }));
   }
 
   /**
@@ -378,6 +419,34 @@ class ClickUpMultiTeamTracker {
     }
 
     console.log('└' + '─'.repeat(88) + '┘');
+
+    // Sezione ORE PER GIORNO - mese corrente
+    const hoursByDayCurrent = this.calculateHoursByDay(data.teams, 'current_month');
+    if (hoursByDayCurrent.length > 0) {
+      console.log('\n┌' + '─'.repeat(88) + '┐');
+      console.log(`│ 📆 ORE PER GIORNO - ${data.period.current_month.toUpperCase()}${' '.repeat(88 - 21 - data.period.current_month.length)} │`);
+      console.log('├' + '─'.repeat(88) + '┤');
+
+      // Mostra le ore per ogni giorno su più colonne per compattezza
+      const itemsPerRow = 4;
+      const colWidth = 20;
+      for (let i = 0; i < hoursByDayCurrent.length; i += itemsPerRow) {
+        let line = '│ ';
+        for (let j = 0; j < itemsPerRow; j++) {
+          if (i + j < hoursByDayCurrent.length) {
+            const day = hoursByDayCurrent[i + j];
+            const dayStr = `${day.date}: ${day.formatted}`;
+            line += dayStr.padEnd(colWidth);
+          } else {
+            line += ' '.repeat(colWidth);
+          }
+        }
+        line = line.padEnd(89) + '│';
+        console.log(line);
+      }
+
+      console.log('└' + '─'.repeat(88) + '┘');
+    }
 
     // Sezione DA FATTURARE (mese precedente) - LA PIÙ IMPORTANTE
     if (hasHourlyRate) {
