@@ -320,6 +320,40 @@ class ClickUpMultiTeamTracker {
   }
 
   /**
+   * Stampa una sezione "DA FATTURARE" per un mese specifico
+   */
+  printDaFatturareSection(data, monthKey, monthName, suffix = '') {
+    const netPercentage = parseFloat(this.config.NET_PERCENTAGE);
+    const hasNetPercentage = !isNaN(netPercentage) && netPercentage > 0 && netPercentage < 100;
+    const title = `💰 DA FATTURARE - ${monthName.toUpperCase()}${suffix}`;
+    const titlePadding = Math.max(0, 88 - 1 - title.length);
+
+    console.log('\n' + '┏' + '━'.repeat(88) + '┓');
+    console.log(`┃ ${title}${' '.repeat(titlePadding)} ┃`);
+    console.log('┗' + '━'.repeat(88) + '┛');
+
+    let totalEarnings = 0;
+    data.teams.forEach((team) => {
+      if (!team.error) {
+        const teamLine = `  • ${team.team_name}:`;
+        const amount = `€${team[monthKey].earnings.toFixed(2).padStart(10)}`;
+        const hours = `(${team[monthKey].hours_formatted})`;
+        console.log(`${teamLine.padEnd(30)} ${amount}  ${hours}`);
+        totalEarnings += team[monthKey].earnings;
+      }
+    });
+
+    console.log('  ' + '─'.repeat(50));
+    console.log(`  💶 TOTALE DA FATTURARE:        €${totalEarnings.toFixed(2).padStart(10)}`);
+
+    if (hasNetPercentage) {
+      const net = totalEarnings * (netPercentage / 100);
+      const netLabel = `  💵 NETTO (${netPercentage}%):`;
+      console.log(`${netLabel.padEnd(33)}€${net.toFixed(2).padStart(10)}`);
+    }
+  }
+
+  /**
    * Stampa il summary pulito in console
    */
   printCleanSummary(data) {
@@ -448,23 +482,10 @@ class ClickUpMultiTeamTracker {
       console.log('└' + '─'.repeat(88) + '┘');
     }
 
-    // Sezione DA FATTURARE (mese precedente) - LA PIÙ IMPORTANTE
+    // Sezione DA FATTURARE - mese precedente (LA PIÙ IMPORTANTE) + mese corrente (in corso)
     if (hasHourlyRate) {
-      console.log('\n' + '┏' + '━'.repeat(88) + '┓');
-      console.log(`┃ 💰 DA FATTURARE - ${data.period.previous_month.toUpperCase()}${' '.repeat(88 - 18 - data.period.previous_month.length)} ┃`);
-      console.log('┗' + '━'.repeat(88) + '┛');
-
-      data.teams.forEach((team) => {
-        if (!team.error) {
-          const teamLine = `  • ${team.team_name}:`;
-          const amount = `€${team.previous_month.earnings.toFixed(2).padStart(10)}`;
-          const hours = `(${team.previous_month.hours_formatted})`;
-          console.log(`${teamLine.padEnd(30)} ${amount}  ${hours}`);
-        }
-      });
-
-      console.log('  ' + '─'.repeat(50));
-      console.log(`  💶 TOTALE DA FATTURARE:        €${data.totals.previous_month.earnings.toFixed(2).padStart(10)}`);
+      this.printDaFatturareSection(data, 'previous_month', data.period.previous_month);
+      this.printDaFatturareSection(data, 'current_month', data.period.current_month, ' (in corso)');
       console.log('');
     }
 
@@ -546,7 +567,8 @@ const config = {
   USER_ID: process.env.USER_ID,
   OUTPUT_DIR: process.env.OUTPUT_DIR || './reports',
   SAVE_REPORT: process.env.SAVE_REPORT || 'true',
-  HOURLY_RATE: process.env.HOURLY_RATE || '0'
+  HOURLY_RATE: process.env.HOURLY_RATE || '0',
+  NET_PERCENTAGE: process.env.NET_PERCENTAGE || '0'
 };
 
 /**
