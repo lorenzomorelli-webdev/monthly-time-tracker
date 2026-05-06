@@ -86,11 +86,19 @@ export default {
 
 async function handleReport(env, chatId) {
   let step = 'init';
+  console.log('[handleReport] start, chatId=', chatId);
+  console.log('[handleReport] env keys:', {
+    hasBotToken: !!env.TELEGRAM_BOT_TOKEN,
+    hasClickupToken: !!env.CLICKUP_TOKEN,
+    hasUserId: !!env.USER_ID,
+    hasTeamIds: !!env.TEAM_IDS,
+    teamIds: env.TEAM_IDS,
+    hourlyRate: env.HOURLY_RATE,
+    netPercentage: env.NET_PERCENTAGE
+  });
   try {
-    step = 'sendChatAction';
-    await sendChatAction(env.TELEGRAM_BOT_TOKEN, chatId, 'typing');
-
     step = 'load-config';
+    console.log('[handleReport] step:', step);
     const config = {
       CLICKUP_TOKEN: env.CLICKUP_TOKEN,
       USER_ID: env.USER_ID,
@@ -98,31 +106,52 @@ async function handleReport(env, chatId) {
       HOURLY_RATE: env.HOURLY_RATE || '0',
       NET_PERCENTAGE: env.NET_PERCENTAGE || '0'
     };
+    console.log('[handleReport] config team count:', config.TEAM_IDS.length);
 
     step = 'validate-config';
+    console.log('[handleReport] step:', step);
     if (!config.CLICKUP_TOKEN || !config.USER_ID || config.TEAM_IDS.length === 0) {
+      console.error('[handleReport] config incompleta');
       await sendPlain(env.TELEGRAM_BOT_TOKEN, chatId,
-        '⚠️ Configurazione incompleta. Verifica i secret CLICKUP_TOKEN, USER_ID, TEAM_IDS.');
+        '⚠️ Configurazione incompleta.');
       return;
     }
 
     step = 'generateReport';
+    console.log('[handleReport] step:', step);
     const data = await generateReport(config);
+    console.log('[handleReport] report generato:', {
+      teams: data.teams.length,
+      prevHours: data.totals.previous_month.hours,
+      currHours: data.totals.current_month.hours
+    });
 
     step = 'formatReport';
+    console.log('[handleReport] step:', step);
     const html = formatReport(data);
+    console.log('[handleReport] html length:', html.length);
 
     step = 'splitMessage';
+    console.log('[handleReport] step:', step);
     const chunks = splitMessage(html);
+    console.log('[handleReport] chunks:', chunks.length);
 
     for (let i = 0; i < chunks.length; i++) {
       step = `sendMessage[${i + 1}/${chunks.length}]`;
+      console.log('[handleReport] step:', step, 'len=', chunks[i].length);
       await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, chunks[i]);
+      console.log('[handleReport] sent chunk', i + 1);
     }
+    console.log('[handleReport] DONE');
   } catch (error) {
-    // Manda l'errore senza parse_mode così non può fallire per HTML invalido
+    console.error('[handleReport] ERRORE in step:', step, error?.stack || error?.message || error);
     const msg = `❌ Errore in "${step}": ${error?.stack || error?.message || String(error)}`;
-    await sendPlain(env.TELEGRAM_BOT_TOKEN, chatId, msg).catch(() => {});
+    try {
+      await sendPlain(env.TELEGRAM_BOT_TOKEN, chatId, msg);
+      console.log('[handleReport] error message sent');
+    } catch (e2) {
+      console.error('[handleReport] FAIL to send error message:', e2?.message || e2);
+    }
   }
 }
 
