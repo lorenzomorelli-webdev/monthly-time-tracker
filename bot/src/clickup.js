@@ -3,7 +3,6 @@
  */
 
 const API_BASE = 'https://api.clickup.com/api/v2';
-const PAGE_SIZE = 100;
 
 function msToHours(ms) {
   if (isNaN(ms)) return 0;
@@ -70,25 +69,17 @@ function getDateRanges() {
 }
 
 async function getTeamTimeEntries(token, teamId, userId, startDate, endDate) {
-  let allEntries = [];
-  let page = 0;
-  while (true) {
-    const params = new URLSearchParams({
-      start_date: startDate.toString(),
-      end_date: endDate.toString(),
-      assignee: userId.toString(),
-      page: page.toString(),
-      page_size: PAGE_SIZE.toString()
-    });
-    const response = await apiCall(token, `${API_BASE}/team/${teamId}/time_entries?${params}`);
-    const entries = response.data || [];
-    if (entries.length === 0) break;
-    allEntries = allEntries.concat(entries);
-    if (entries.length < PAGE_SIZE) break;
-    page++;
-    await new Promise(r => setTimeout(r, 100));
-  }
-  return allEntries;
+  // ClickUp's time_entries endpoint ignora il param `page` e ritorna tutte le entries
+  // del range in una sola chiamata. Paginare causerebbe duplicati infiniti.
+  const params = new URLSearchParams({
+    start_date: startDate.toString(),
+    end_date: endDate.toString(),
+    assignee: userId.toString()
+  });
+  const response = await apiCall(token, `${API_BASE}/team/${teamId}/time_entries?${params}`);
+  const entries = response.data || [];
+  console.log(`[clickup] team=${teamId} entries=${entries.length}`);
+  return entries;
 }
 
 async function getTeamName(token, teamId, teamsCache) {

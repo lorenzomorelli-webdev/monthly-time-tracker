@@ -87,6 +87,7 @@ export default {
 async function handleReport(env, chatId) {
   let step = 'init';
   console.log('[handleReport] start, chatId=', chatId);
+  await sendChatAction(env.TELEGRAM_BOT_TOKEN, chatId, 'typing');
   console.log('[handleReport] env keys:', {
     hasBotToken: !!env.TELEGRAM_BOT_TOKEN,
     hasClickupToken: !!env.CLICKUP_TOKEN,
