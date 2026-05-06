@@ -11,11 +11,12 @@ Perfetto per freelancer e consulenti che gestiscono più progetti e hanno bisogn
 - ✅ **Supporto Multi-Team**: Analizza più team/workspace in una singola esecuzione.
 - ✅ **Report Visivo Migliorato**: Layout con box Unicode per una lettura immediata delle informazioni.
 - ✅ **Report Aggregato**: Fornisce totali per singolo team e un totale generale con differenze in ore ed euro.
-- ✅ **Gestione Paginazione**: Recupera automaticamente tutte le time entries, anche se sono migliaia.
+- ✅ **Calcolo Netto Opzionale**: Riga `NETTO (X%)` sotto al totale "DA FATTURARE" se imposti `NET_PERCENTAGE`.
 - ✅ **Rate Limiting Intelligente**: Gestisce il limite di richieste API di ClickUp con retry automatico.
 - ✅ **Validazione Configurazione**: Controlla che le variabili d'ambiente siano corrette prima di iniziare.
 - ✅ **Export JSON**: Salva il report dettagliato in un file JSON.
 - ✅ **Report Pulito in Console**: Mostra un riepilogo chiaro e leggibile direttamente nel terminale.
+- 📱 **Bot Telegram on-demand**: Scatena il report dal cellulare con un tap su `/report`. Vedi [`bot/`](./bot/README.md).
 
 ## 📋 Requisiti
 
@@ -66,6 +67,10 @@ TEAM_IDS=your_team_id_1,your_team_id_2
 
 # Tariffa oraria per calcolare i fatturati (opzionale, default: 0)
 HOURLY_RATE=25
+
+# Percentuale netto sul lordo (opzionale, default: 0)
+# Es. 72.48 → mostra una riga "NETTO (72.48%)" sotto al totale "DA FATTURARE"
+NET_PERCENTAGE=72.48
 
 # Opzioni di output
 OUTPUT_DIR=./reports
@@ -158,6 +163,17 @@ Lo strumento calcola automaticamente i fatturati in base alla tariffa oraria con
 ### Disabilitare i Calcoli di Fatturato
 
 Se vuoi vedere solo le ore senza i calcoli economici, imposta `HOURLY_RATE="0"` o rimuovi la variabile dal file `.env`.
+
+## 📱 Accesso da cellulare (Bot Telegram)
+
+Per consultare il report dal telefono senza accendere il computer, il progetto include un bot Telegram che gira su **Cloudflare Workers** (free tier).
+
+- Setup ~5 minuti, zero server da mantenere
+- Riusa gli stessi valori del tuo `.env` (token, team, tariffa, percentuale netto)
+- Whitelist sul `chat_id`: solo tu puoi comandare il bot
+- Comando `/report` → riepilogo in chat in 1-2 secondi (con sezioni "DA FATTURARE", netto, ore per giorno)
+
+Istruzioni complete: [`bot/README.md`](./bot/README.md).
 
 ## 📁 Struttura Output
 
@@ -372,8 +388,8 @@ Content-Type: application/json
 | `start_date` | number | Timestamp inizio (millisecondi) |
 | `end_date` | number | Timestamp fine (millisecondi) |
 | `assignee` | string | ID dell'utente |
-| `page` | number | Numero pagina (default: 0) |
-| `page_size` | number | Elementi per pagina (max: 100) |
+
+> ℹ️ Nota: l'endpoint `time_entries` di ClickUp ignora i parametri `page` / `page_size` e ritorna tutte le entries del range in un'unica risposta. Tentare di paginare causa duplicati.
 
 ### Rate Limits
 
@@ -383,10 +399,9 @@ Content-Type: application/json
 
 ### Limiti API
 
-1. **Paginazione**: Massimo 100 time entries per chiamata
-2. **Periodo**: Nessun limite ufficiale, ma performance migliori per periodi < 1 anno
-3. **Dati**: Time entries filtrabili solo per team, non per singolo progetto/task tramite API
-4. **Timestamp**: Deve essere in millisecondi UTC
+1. **Periodo**: Nessun limite ufficiale, ma performance migliori per periodi < 1 anno
+2. **Dati**: Time entries filtrabili solo per team, non per singolo progetto/task tramite API
+3. **Timestamp**: Deve essere in millisecondi UTC
 
 ## 🛠️ Sviluppo
 
@@ -394,12 +409,21 @@ Content-Type: application/json
 
 ```
 clickup-time-tracker/
-├── index.js              # Script principale
+├── index.js              # Script principale (CLI Node.js)
 ├── setup.js              # Setup automatico team/user ID
-├── utils.js               # Funzioni utility
-├── cron-scheduler.js      # Gestione schedulazione
-├── test.js                # Test suite
-├── package.json           # Configurazione Node.js
-├── config.example.env     # Esempio configurazione
-└── README.md             # Documentazione
+├── utils.js              # Funzioni utility
+├── cron-scheduler.js     # Gestione schedulazione
+├── test.js               # Test suite
+├── package.json          # Configurazione Node.js
+├── config.example.env    # Esempio configurazione
+├── bot/                  # Bot Telegram on-demand (Cloudflare Workers)
+│   ├── setup.sh          # Deploy + secrets + webhook in un solo script
+│   ├── wrangler.toml     # Config Cloudflare Workers
+│   ├── src/
+│   │   ├── index.js      # Entry: routing comandi + whitelist chat_id
+│   │   ├── clickup.js    # Client ClickUp API
+│   │   ├── format.js     # Formatter HTML per Telegram
+│   │   └── telegram.js   # Helper sendMessage
+│   └── README.md         # Istruzioni setup bot
+└── README.md             # Questo file
 ```
