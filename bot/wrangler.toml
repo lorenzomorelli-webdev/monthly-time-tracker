@@ -1,0 +1,13 @@
+name = "clickup-summary-bot"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+# I secret vengono iniettati via `wrangler secret put`:
+# - TELEGRAM_BOT_TOKEN
+# - TELEGRAM_WEBHOOK_SECRET   (una stringa random, vedi README)
+# - ALLOWED_CHAT_ID           (il tuo chat_id Telegram numerico)
+# - CLICKUP_TOKEN
+# - USER_ID
+# - TEAM_IDS                  (CSV: "111,222,333")
+# - HOURLY_RATE               (opzionale, default 0)
+# - NET_PERCENTAGE            (opzionale, default 0)
