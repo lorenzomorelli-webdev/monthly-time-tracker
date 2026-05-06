@@ -85,9 +85,12 @@ export default {
 };
 
 async function handleReport(env, chatId) {
+  let step = 'init';
   try {
+    step = 'sendChatAction';
     await sendChatAction(env.TELEGRAM_BOT_TOKEN, chatId, 'typing');
 
+    step = 'load-config';
     const config = {
       CLICKUP_TOKEN: env.CLICKUP_TOKEN,
       USER_ID: env.USER_ID,
@@ -96,28 +99,39 @@ async function handleReport(env, chatId) {
       NET_PERCENTAGE: env.NET_PERCENTAGE || '0'
     };
 
+    step = 'validate-config';
     if (!config.CLICKUP_TOKEN || !config.USER_ID || config.TEAM_IDS.length === 0) {
-      await sendMessage(
-        env.TELEGRAM_BOT_TOKEN, chatId,
-        '⚠️ Configurazione incompleta. Verifica i secret CLICKUP_TOKEN, USER_ID, TEAM_IDS.'
-      );
+      await sendPlain(env.TELEGRAM_BOT_TOKEN, chatId,
+        '⚠️ Configurazione incompleta. Verifica i secret CLICKUP_TOKEN, USER_ID, TEAM_IDS.');
       return;
     }
 
+    step = 'generateReport';
     const data = await generateReport(config);
+
+    step = 'formatReport';
     const html = formatReport(data);
+
+    step = 'splitMessage';
     const chunks = splitMessage(html);
-    for (const chunk of chunks) {
-      await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, chunk);
+
+    for (let i = 0; i < chunks.length; i++) {
+      step = `sendMessage[${i + 1}/${chunks.length}]`;
+      await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, chunks[i]);
     }
   } catch (error) {
-    await sendMessage(
-      env.TELEGRAM_BOT_TOKEN, chatId,
-      `❌ Errore durante la generazione del report:\n<code>${escapeHtml(error.message || String(error))}</code>`
-    ).catch(() => {});
+    // Manda l'errore senza parse_mode così non può fallire per HTML invalido
+    const msg = `❌ Errore in "${step}": ${error?.stack || error?.message || String(error)}`;
+    await sendPlain(env.TELEGRAM_BOT_TOKEN, chatId, msg).catch(() => {});
   }
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+async function sendPlain(botToken, chatId, text) {
+  const truncated = text.length > 3900 ? text.slice(0, 3900) + '\n…[troncato]' : text;
+  const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: truncated })
+  });
+  if (!r.ok) throw new Error(`Telegram sendPlain ${r.status}: ${await r.text()}`);
 }
