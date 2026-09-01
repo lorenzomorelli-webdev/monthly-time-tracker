@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Setup script per ottenere team_id e user_id da ClickUp API
- * Esegui: node setup.js
+ * Setup script per ottenere TEAM_IDS e USER_ID dalla ClickUp API
+ * Esegui: pnpm run setup
  */
 
 import dotenv from 'dotenv';
@@ -85,30 +85,23 @@ class ClickUpSetup {
     console.log(`ID: ${user.id}`);
   }
 
-  generateEnvFile(teamId, userId) {
-    // Calcola automaticamente il range dal mese scorso al mese corrente
-    const now = new Date();
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    
-    const envContent = `# ClickUp API Configuration
-CLICKUP_TOKEN=${this.token}
+  generateEnvFile(teamIds, userId) {
+    const normalizedTeamIds = (Array.isArray(teamIds) ? teamIds : [teamIds])
+      .map(id => String(id).trim())
+      .filter(Boolean);
 
-# Team and User IDs
-TEAM_ID=${teamId}
-USER_ID=${userId}
+    return `# ClickUp Multi-Team Time Tracker Configuration
+CLICKUP_TOKEN="${this.token}"
+USER_ID="${userId}"
+TEAM_IDS="${normalizedTeamIds.join(',')}"
 
-# Date range (timestamp in milliseconds)
-# Range automatico: dal mese scorso al mese corrente
-# ${lastMonthStart.toLocaleDateString('it-IT')} - ${currentMonthEnd.toLocaleDateString('it-IT')}
-START_DATE=${lastMonthStart.getTime()}
-END_DATE=${currentMonthEnd.getTime()}
+# Calcoli economici (HOURLY_RATE=0 disabilita gli importi)
+HOURLY_RATE="30"
+NET_PERCENTAGE="0"
 
-# Output options
-EXPORT_CSV=true
-OUTPUT_DIR=./reports`;
-
-    return envContent;
+# Output locale
+OUTPUT_DIR="./reports"
+SAVE_REPORT="true"`;
   }
 }
 
@@ -118,8 +111,9 @@ async function main() {
   if (!token) {
     console.error('❌ Token ClickUp mancante!');
     console.log('\nUso:');
-    console.log('1. Imposta CLICKUP_TOKEN nel file .env');
-    console.log('2. Oppure: node setup.js your_token_here');
+    console.log('1. Copia config.example.env in .env');
+    console.log('2. Imposta CLICKUP_TOKEN nel file .env');
+    console.log('3. Esegui: pnpm run setup');
     console.log('\n📖 Come ottenere il token:');
     console.log('   Settings > Apps > API Token > Generate Token');
     console.log('   https://app.clickup.com/settings/apps');
@@ -139,24 +133,15 @@ async function main() {
     const teams = await setup.getTeams();
     setup.displayTeams(teams);
 
-    // Se c'è un solo team, usalo automaticamente
-    let selectedTeam;
-    if (teams.length === 1) {
-      selectedTeam = teams[0];
-      console.log(`\n✅ Team selezionato automaticamente: ${selectedTeam.name}`);
-    } else {
-      console.log('\n❓ Seleziona un team inserendo il numero corrispondente:');
-      // In un ambiente reale, dovresti usare readline per l'input
-      selectedTeam = teams[0]; // Per ora selezioniamo il primo
-      console.log(`📝 Per ora uso il primo team: ${selectedTeam.name}`);
+    if (teams.length === 0) {
+      throw new Error('Nessun team/workspace disponibile per questo token');
     }
 
-    // Ottieni membri del team
-    const members = await setup.getTeamMembers(selectedTeam.id);
-    setup.displayMembers(members);
+    const teamIds = teams.map(team => team.id);
+    console.log(`\n✅ Configurati ${teamIds.length} team/workspace. Puoi rimuovere da TEAM_IDS quelli che non vuoi analizzare.`);
 
     // Genera file .env
-    const envContent = setup.generateEnvFile(selectedTeam.id, userInfo.id);
+    const envContent = setup.generateEnvFile(teamIds, userInfo.id);
     
     console.log('\n📄 Contenuto del file .env:');
     console.log('─'.repeat(50));
@@ -166,8 +151,8 @@ async function main() {
     console.log('\n✅ Setup completato!');
     console.log('📋 Prossimi passi:');
     console.log('1. Copia il contenuto sopra in un file .env');
-    console.log('2. Modifica START_DATE e END_DATE se necessario');
-    console.log('3. Esegui: npm start');
+    console.log('2. Verifica HOURLY_RATE (preimpostata a 30) e NET_PERCENTAGE');
+    console.log('3. Esegui: pnpm start');
 
   } catch (error) {
     console.error('❌ Errore durante il setup:', error.message);
@@ -187,4 +172,4 @@ if (import.meta.url.startsWith('file://') && process.argv[1].endsWith('setup.js'
   main();
 }
 
-export default ClickUpSetup; 
+export default ClickUpSetup;

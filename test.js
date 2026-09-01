@@ -109,10 +109,9 @@ class TestSuite {
   async testConfigValidation() {
     const validConfig = {
       CLICKUP_TOKEN: 'pk_123456',
-      TEAM_ID: '123456',
+      TEAM_IDS: ['123456', '654321'],
       USER_ID: '789012',
-      START_DATE: Date.now() - 86400000, // ieri
-      END_DATE: Date.now() // oggi
+      HOURLY_RATE: '30'
     };
 
     const validation = ValidationUtils.validateConfig(validConfig);
@@ -122,15 +121,84 @@ class TestSuite {
 
     const invalidConfig = {
       CLICKUP_TOKEN: 'invalid',
-      TEAM_ID: '',
+      TEAM_IDS: [],
       USER_ID: '123',
-      START_DATE: Date.now(),
-      END_DATE: Date.now() - 86400000 // nel passato
+      HOURLY_RATE: '-1'
     };
 
     const invalidValidation = ValidationUtils.validateConfig(invalidConfig);
     if (invalidValidation.isValid) {
       throw new Error('Configurazione non valida accettata');
+    }
+  }
+
+  /**
+   * Test della configurazione generata dallo script di setup
+   */
+  async testSetupEnvGeneration() {
+    const setup = new ClickUpSetup('pk_test_token');
+    const envContent = setup.generateEnvFile(['111', '222'], '333');
+
+    const expectedLines = [
+      'CLICKUP_TOKEN="pk_test_token"',
+      'USER_ID="333"',
+      'TEAM_IDS="111,222"',
+      'HOURLY_RATE="30"',
+      'NET_PERCENTAGE="0"',
+      'OUTPUT_DIR="./reports"',
+      'SAVE_REPORT="true"'
+    ];
+
+    expectedLines.forEach(line => {
+      if (!envContent.includes(line)) {
+        throw new Error(`Configurazione setup incompleta: manca ${line}`);
+      }
+    });
+
+    const deprecatedKeys = ['TEAM_ID=', 'START_DATE=', 'END_DATE=', 'EXPORT_CSV='];
+    deprecatedKeys.forEach(key => {
+      if (envContent.includes(key)) {
+        throw new Error(`Configurazione setup obsoleta: contiene ${key}`);
+      }
+    });
+  }
+
+  /**
+   * Test del contratto ClickUp: il range completo viene richiesto una sola volta
+   */
+  async testTimeEntriesSingleRequest() {
+    const tracker = new ClickUpTimeTracker({
+      CLICKUP_TOKEN: 'pk_test_token',
+      TEAM_IDS: ['111'],
+      USER_ID: '333',
+      HOURLY_RATE: '0'
+    });
+    const sampleEntries = Array.from({ length: 100 }, (_, index) => ({
+      id: String(index + 1),
+      duration: '3600000',
+      start: '1767225600000',
+      end: '1767229200000',
+      description: `Entry ${index + 1}`,
+      task: null,
+      user: { id: 333, username: 'test-user', email: 'test@example.com' }
+    }));
+    const requestedUrls = [];
+
+    tracker.apiCall = async url => {
+      requestedUrls.push(url);
+      return requestedUrls.length === 1 ? { data: sampleEntries } : { data: [] };
+    };
+
+    const entries = await tracker.getTeamTimeEntries('111', '333', 1767225600000, 1769903999999);
+
+    if (requestedUrls.length !== 1) {
+      throw new Error(`ClickUp è stato interrogato ${requestedUrls.length} volte invece di una`);
+    }
+    if (requestedUrls[0].includes('page=') || requestedUrls[0].includes('page_size=')) {
+      throw new Error('La richiesta ClickUp contiene parametri di paginazione non supportati');
+    }
+    if (entries.length !== 100) {
+      throw new Error(`Numero di entry inatteso: ${entries.length}`);
     }
   }
 
@@ -216,7 +284,7 @@ class TestSuite {
    * Test integrazione completa (se configurato)
    */
   async testFullIntegration() {
-    const requiredEnvVars = ['CLICKUP_TOKEN', 'TEAM_ID', 'USER_ID'];
+    const requiredEnvVars = ['CLICKUP_TOKEN', 'TEAM_IDS', 'USER_ID'];
     const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
     
     if (missingVars.length > 0) {
@@ -226,11 +294,9 @@ class TestSuite {
 
     const config = {
       CLICKUP_TOKEN: process.env.CLICKUP_TOKEN,
-      TEAM_ID: process.env.TEAM_ID,
+      TEAM_IDS: process.env.TEAM_IDS.split(',').map(id => id.trim()).filter(Boolean),
       USER_ID: process.env.USER_ID,
-      START_DATE: Date.now() - (7 * 24 * 60 * 60 * 1000), // 7 giorni fa
-      END_DATE: Date.now(),
-      EXPORT_CSV: 'true',
+      HOURLY_RATE: process.env.HOURLY_RATE || '0',
       OUTPUT_DIR: './test_reports'
     };
 
@@ -277,6 +343,8 @@ class TestSuite {
     await this.runTest('Date Utils', () => this.testDateUtils());
     await this.runTest('Validation Utils', () => this.testValidationUtils());
     await this.runTest('Config Validation', () => this.testConfigValidation());
+    await this.runTest('Setup Env Generation', () => this.testSetupEnvGeneration());
+    await this.runTest('Time Entries Single Request', () => this.testTimeEntriesSingleRequest());
     await this.runTest('File Utils', () => this.testFileUtils());
     await this.runTest('API Connection', () => this.testApiConnection());
     await this.runTest('Full Integration', () => this.testFullIntegration());
@@ -325,4 +393,4 @@ if (import.meta.url.startsWith('file://') && process.argv[1].endsWith('test.js')
   });
 }
 
-export default TestSuite; 
+export default TestSuite;

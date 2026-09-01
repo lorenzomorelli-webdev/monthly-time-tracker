@@ -1,13 +1,21 @@
 {
   "name": "clickup-summary-bot",
   "version": "1.0.0",
+  "description": "Telegram interface for ClickUp monthly time and billing reports on Cloudflare Workers.",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail"
   },
+  "keywords": [
+    "clickup",
+    "cloudflare-workers",
+    "telegram-bot",
+    "time-tracking"
+  ],
   "devDependencies": {
     "wrangler": "^4.88.0"
   }

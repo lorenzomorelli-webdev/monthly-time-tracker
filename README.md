@@ -1,429 +1,367 @@
-# ClickUp Multi-Team Time Tracker
+# ClickUp Monthly Time & Billing Tracker
 
-Script Node.js per calcolare e confrontare le ore tracciate da un utente su più team/progetti di ClickUp, analizzando il **mese corrente rispetto al mese precedente**.
+Genera report mensili di ore e fatturato a partire dalle time entry di ClickUp, confrontando il mese corrente con quello precedente su uno o più workspace.
 
-Perfetto per freelancer e consulenti che gestiscono più progetti e hanno bisogno di sapere esattamente quanto fatturare per ogni cliente.
+Il progetto può essere usato dal terminale oppure tramite un bot Telegram eseguito su Cloudflare Workers. È pensato per freelance e consulenti che vogliono trasformare il tempo tracciato in un riepilogo immediatamente utilizzabile per la fatturazione.
 
-## 🚀 Funzionalità
+## Modalità disponibili
 
-- ✅ **Confronto Mensile**: Calcola le ore totali per il mese corrente e quello precedente.
-- ✅ **Fatturazione Intelligente**: Mostra i fatturati per entrambi i mesi con una sezione dedicata "DA FATTURARE" per il mese precedente.
-- ✅ **Supporto Multi-Team**: Analizza più team/workspace in una singola esecuzione.
-- ✅ **Report Visivo Migliorato**: Layout con box Unicode per una lettura immediata delle informazioni.
-- ✅ **Report Aggregato**: Fornisce totali per singolo team e un totale generale con differenze in ore ed euro.
-- ✅ **Calcolo Netto Opzionale**: Riga `NETTO (X%)` sotto al totale "DA FATTURARE" se imposti `NET_PERCENTAGE`.
-- ✅ **Rate Limiting Intelligente**: Gestisce il limite di richieste API di ClickUp con retry automatico.
-- ✅ **Validazione Configurazione**: Controlla che le variabili d'ambiente siano corrette prima di iniziare.
-- ✅ **Export JSON**: Salva il report dettagliato in un file JSON.
-- ✅ **Report Pulito in Console**: Mostra un riepilogo chiaro e leggibile direttamente nel terminale.
-- 📱 **Bot Telegram on-demand**: Scatena il report dal cellulare con un tap su `/report`. Vedi [`bot/`](./bot/README.md).
+| Modalità | Dove gira | Configurazione | Output |
+| --- | --- | --- | --- |
+| CLI locale | Node.js sul computer | `.env` nella root | Console e report JSON |
+| Bot Telegram | Cloudflare Workers | Secret del Worker | Messaggi Telegram con `/report` |
 
-## 📋 Requisiti
+Le due configurazioni sono separate a runtime. Durante il provisioning, `bot/setup.sh` può copiare esplicitamente i valori di `.env` nei secret del Worker; le modifiche successive al file locale non si sincronizzano automaticamente con Cloudflare.
 
-- Node.js 18+
-- Un Personal API Token di ClickUp
-- Gli ID dei Team/Workspace da analizzare
-- L'ID dell'utente di cui tracciare le ore
-
-## 🔧 Installazione
-
-1.  **Clona il repository**
-    ```bash
-    git clone <repository-url>
-    cd clickup-multi-team-tracker
-    ```
-
-2.  **Installa le dipendenze**
-    ```bash
-    npm install
-    ```
-
-3.  **Configura le variabili d'ambiente**
-    Copia il file di esempio e modificalo con i tuoi dati.
-    ```bash
-    cp config.example.env .env
-    ```
-
-## 🔑 Configurazione
-
-Modifica il file `.env` con i tuoi dati. Puoi ottenere `TEAM_ID` e `USER_ID` usando lo script `setup.js`.
-
-```bash
-# Esegui lo script di setup per trovare i tuoi ID
-node setup.js pk_your_token_here
+```text
+                         ┌─> CLI Node.js ───────> Console + JSON
+ClickUp API ─────────────┤
+                         └─> Cloudflare Worker ─> Telegram
 ```
 
-### File `.env` Esempio
+## Funzionalità
+
+- Confronto tra mese precedente e mese corrente.
+- Aggregazione di più workspace ClickUp per un singolo utente.
+- Totali per workspace e totali generali.
+- Calcolo del lordo tramite tariffa oraria configurabile.
+- Calcolo facoltativo del netto tramite `NET_PERCENTAGE`.
+- Sezioni “DA FATTURARE” per il mese concluso e per quello in corso.
+- Riepilogo delle ore per giorno nel mese corrente.
+- Retry automatico in caso di risposta ClickUp `429`.
+- Esportazione locale del report completo in JSON.
+- Consultazione mobile tramite bot Telegram con accesso limitato a un solo `chat_id`.
+
+## Requisiti
+
+### CLI locale
+
+- Node.js 18 o successivo.
+- pnpm.
+- Un [Personal API Token di ClickUp](https://developer.clickup.com/docs/authentication).
+- L’ID dell’utente da analizzare.
+- Gli ID dei workspace ClickUp da includere.
+
+### Bot Telegram
+
+Oltre ai requisiti ClickUp:
+
+- Un account Cloudflare.
+- Un bot creato con [@BotFather](https://t.me/BotFather).
+- Wrangler autenticato sull’account Cloudflare corretto.
+
+## Installazione locale
+
+```bash
+git clone https://github.com/lorenzomorelli-webdev/monthly-time-tracker.git
+cd monthly-time-tracker
+pnpm install
+cp config.example.env .env
+```
+
+Apri `.env` e inserisci almeno il token ClickUp. Per recuperare automaticamente utente e workspace disponibili:
+
+```bash
+pnpm run setup
+```
+
+Lo script non sovrascrive `.env`: mostra una configurazione completa da verificare e copiare. Include tutti i workspace accessibili al token; rimuovi da `TEAM_IDS` quelli che non vuoi analizzare.
+
+Infine esegui il report:
+
+```bash
+pnpm start
+```
+
+## Configurazione locale
+
+| Variabile | Obbligatoria | Default | Descrizione |
+| --- | --- | --- | --- |
+| `CLICKUP_TOKEN` | Sì | — | Personal API Token ClickUp, con prefisso `pk_`. |
+| `USER_ID` | Sì | — | Utente ClickUp di cui sommare le time entry. |
+| `TEAM_IDS` | Sì | — | ID dei workspace separati da virgola. |
+| `HOURLY_RATE` | No | `0` | Tariffa oraria in euro; `0` disabilita gli importi. |
+| `NET_PERCENTAGE` | No | `0` | Percentuale del lordo da mostrare come netto; `0` la disabilita. |
+| `OUTPUT_DIR` | No | `./reports` | Directory dei report JSON locali. |
+| `SAVE_REPORT` | No | `true` | Imposta `false` per non salvare il JSON. |
+
+Esempio:
 
 ```env
-# ClickUp API Configuration
-CLICKUP_TOKEN=pk_your_very_long_token_here
-
-# User ID da analizzare
-USER_ID=12345678
-
-# Lista di Team ID da analizzare, separati da virgola
-TEAM_IDS=your_team_id_1,your_team_id_2
-
-# Tariffa oraria per calcolare i fatturati (opzionale, default: 0)
-HOURLY_RATE=25
-
-# Percentuale netto sul lordo (opzionale, default: 0)
-# Es. 72.48 → mostra una riga "NETTO (72.48%)" sotto al totale "DA FATTURARE"
-NET_PERCENTAGE=72.48
-
-# Opzioni di output
-OUTPUT_DIR=./reports
-SAVE_REPORT=true
+CLICKUP_TOKEN="pk_your_token_here"
+USER_ID="12345678"
+TEAM_IDS="90111111111,90122222222"
+HOURLY_RATE="30"
+NET_PERCENTAGE="0"
+OUTPUT_DIR="./reports"
+SAVE_REPORT="true"
 ```
 
-## 📊 Utilizzo
+## Impostare la tariffa a 30 €/ora
 
-### Esecuzione Base
+### CLI locale
 
-Per eseguire lo script e generare il report per i team configurati nel file `.env`:
+Nel file `.env` della root:
+
+```env
+HOURLY_RATE="30"
+```
+
+La formula applicata è:
+
+```text
+importo lordo = ore decimali × HOURLY_RATE
+netto mostrato = importo lordo × NET_PERCENTAGE / 100
+```
+
+### Bot su Cloudflare
+
+Il Worker usa una variabile separata. Dalla directory `bot/`:
 
 ```bash
-npm start
+pnpm exec wrangler secret put HOURLY_RATE --name clickup-summary-bot
 ```
 
-Oppure direttamente con Node:
+Inserisci `30` quando Wrangler lo richiede. Il valore rimane nascosto nel dashboard e il comando pubblica immediatamente una nuova versione del Worker. Per tornare indietro, ripeti il comando inserendo il valore precedente.
+
+Verifica il risultato inviando `/report` al bot. Consulta anche la [guida dedicata al bot](./bot/README.md).
+
+## Utilizzo
+
+### Terminale
 
 ```bash
-node index.js
+pnpm start
 ```
 
-### Esecuzione Semplificata (macOS/Linux)
+Per abilitare i log diagnostici:
 
-Dopo aver reso eseguibile lo script `run.sh` (`chmod +x run.sh`), puoi semplicemente fare doppio click su di esso.
-
-### Output di Esempio in Console
-
-```
-══════════════════════════════════════════════════════════════════════════════════════════
-                    📊 CLICKUP TIME TRACKER - REPORT MENSILE
-══════════════════════════════════════════════════════════════════════════════════════════
-👤 mario rossi (ID: 12345678)
-📅 novembre 2024 vs dicembre 2024
-
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ 🏢 CLIENTE A                                                                           │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│   📅 novembre 2024: 105h 30m  (157 entries)             →  €   2637.50                   │
-│   📅 dicembre 2024: 15h 45m   ( 24 entries)             →  €    393.75                   │
-│   📉 Differenza: -89.8h                                 →    -€2243.75                     │
-└────────────────────────────────────────────────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ 🏢 CLIENTE B                                                                           │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│   📅 novembre 2024: 42h 15m   ( 68 entries)             →  €   1056.25                   │
-│   📅 dicembre 2024: 38h 30m   ( 61 entries)             →  €    962.50                   │
-│   📉 Differenza: -3.8h                                  →      -€93.75                     │
-└────────────────────────────────────────────────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ 🏆 TOTALI GENERALI                                                                     │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│   📅 novembre 2024: 147h 45m  (225 entries)             →  €   3693.75                   │
-│   📅 dicembre 2024: 54h 15m   ( 85 entries)             →  €   1356.25                   │
-│   📉 Differenza: -93.5h                                 →    -€2337.50                     │
-└────────────────────────────────────────────────────────────────────────────────────────┘
-
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ 💰 DA FATTURARE - NOVEMBRE 2024                                                          ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-  • Cliente A:                 €   2637.50  (105h 30m)
-  • Cliente B:                 €   1056.25  (42h 15m)
-  ──────────────────────────────────────────────────
-  💶 TOTALE DA FATTURARE:        €   3693.75
-
-══════════════════════════════════════════════════════════════════════════════════════════
-✅ Report JSON salvato: reports/multi_team_report_2024-12-01.json
-✅ Multi-team report completato!
+```bash
+pnpm debug
 ```
 
-## 💰 Funzionalità Fatturazione
+### Avvio con doppio clic su macOS
 
-Lo strumento calcola automaticamente i fatturati in base alla tariffa oraria configurata in `HOURLY_RATE`.
+Il file `clickupSummary.command`:
 
-### Come Funziona
+1. apre Terminale nella directory corretta;
+2. esegue `node index.js`;
+3. mantiene visibile il report fino alla pressione di Invio.
 
-1. **Configura la tariffa**: Imposta `HOURLY_RATE` nel file `.env` (es. `HOURLY_RATE="25"` per €25/ora)
-2. **Esegui il tracker**: I fatturati vengono calcolati automaticamente per ogni progetto
-3. **Visualizza i risultati**: La sezione **"DA FATTURARE"** mostra chiaramente quanto fatturare per il mese precedente
+Se macOS ne blocca l’esecuzione, rendilo eseguibile:
 
-### Informazioni Mostrate
+```bash
+chmod +x clickupSummary.command
+```
 
-- **Fatturati per progetto**: Ore e importo per ogni team/cliente
-- **Fatturato totale**: Somma di tutti i progetti
-- **Confronto mensile**: Fatturati del mese corrente vs precedente con differenze
-- **Sezione DA FATTURARE**: Evidenzia gli importi da fatturare per il mese precedente (quello completato)
+## Contenuto del report
 
-### Disabilitare i Calcoli di Fatturato
+La console mostra:
 
-Se vuoi vedere solo le ore senza i calcoli economici, imposta `HOURLY_RATE="0"` o rimuovi la variabile dal file `.env`.
+- utente e periodo analizzato;
+- ore, numero di entry e importo per ogni workspace;
+- differenza tra i due mesi;
+- totali generali;
+- ore aggregate per giorno nel mese corrente;
+- importi “DA FATTURARE” del mese precedente e di quello in corso;
+- netto stimato, se configurato.
 
-## 📱 Accesso da cellulare (Bot Telegram)
+Quando `SAVE_REPORT` non è `false`, viene creato:
 
-Per consultare il report dal telefono senza accendere il computer, il progetto include un bot Telegram che gira su **Cloudflare Workers** (free tier).
+```text
+reports/multi_team_report_YYYY-MM-DD.json
+```
 
-- Setup ~5 minuti, zero server da mantenere
-- Riusa gli stessi valori del tuo `.env` (token, team, tariffa, percentuale netto)
-- Whitelist sul `chat_id`: solo tu puoi comandare il bot
-- Comando `/report` → riepilogo in chat in 1-2 secondi (con sezioni "DA FATTURARE", netto, ore per giorno)
-
-Istruzioni complete: [`bot/README.md`](./bot/README.md).
-
-## 📁 Struttura Output
-
-### JSON Output (`time_report_YYYY-MM-DD.json`)
+Struttura abbreviata:
 
 ```json
 {
-  "totalHours": 168.5,
-  "totalDuration": 606600000,
-  "entriesCount": 87,
-  "summary": {
-    "formatted_duration": "168h 30m",
-    "period": {
-      "start": "1 gennaio 2024, 01:00:00",
-      "end": "31 gennaio 2024, 23:59:59"
-    },
-    "user_id": "456",
-    "team_id": "123"
+  "user_id": "12345678",
+  "username": "Mario Rossi",
+  "period": {
+    "previous_month": "agosto 2026",
+    "current_month": "settembre 2026"
   },
-  "daily_breakdown": [
+  "teams": [
     {
-      "date": "Mon Jan 01 2024",
-      "hours": 8.5,
-      "formatted_duration": "8h 30m",
-      "entries_count": 4
-    }
-  ],
-  "task_breakdown": [
-    {
-      "task_name": "Sviluppo Frontend",
-      "task_id": "task123",
-      "hours": 45.2,
-      "formatted_duration": "45h 12m",
-      "entries_count": 23
-    }
-  ],
-  "entriesList": [
-    {
-      "id": "entry123",
-      "description": "Implementazione feature X",
-      "duration": 7200000,
-      "start": 1704067200000,
-      "end": 1704074400000,
-      "task": {
-        "id": "task123",
-        "name": "Sviluppo Frontend",
-        "url": "https://app.clickup.com/t/task123"
+      "team_id": "90111111111",
+      "team_name": "Cliente A",
+      "previous_month": {
+        "hours": 120.5,
+        "hours_formatted": "120h 30m",
+        "entries_count": 85,
+        "earnings": 3615,
+        "entries": [
+          { "id": "entry_1", "duration": "3600000" }
+        ]
       },
-      "user": {
-        "id": "456",
-        "username": "john.doe",
-        "email": "john@example.com"
+      "current_month": {
+        "hours": 8,
+        "hours_formatted": "8h 0m",
+        "entries_count": 5,
+        "earnings": 240,
+        "entries": [
+          { "id": "entry_86", "duration": "3600000" }
+        ]
       }
     }
-  ]
+  ],
+  "totals": {
+    "previous_month": {
+      "hours": 120.5,
+      "entries": 85,
+      "earnings": 3615
+    },
+    "current_month": {
+      "hours": 8,
+      "entries": 5,
+      "earnings": 240
+    }
+  }
 }
 ```
 
-### CSV Output (`time_report_YYYY-MM-DD.csv`)
+Il JSON reale contiene anche le time entry originali restituite da ClickUp. Può quindi includere descrizioni, task e dati utente: non pubblicarlo senza averlo controllato. La directory `reports/` è esclusa da Git.
 
-```csv
-ID,Descrizione,Ore,Data Inizio,Data Fine,Task,Task ID,Utente
-entry123,Implementazione feature X,2.00,1 gennaio 2024 10:00:00,1 gennaio 2024 12:00:00,Sviluppo Frontend,task123,john.doe
-```
+## Bot Telegram su Cloudflare Workers
 
-## 🕐 Schedulazione Automatica
+Il bot espone tre comandi:
 
-### Setup Cron Job
+- `/report`: genera il riepilogo mensile.
+- `/start`: mostra l’aiuto.
+- `/help`: mostra l’aiuto.
 
-```bash
-# Mostra esempi di schedulazione
-node cron-scheduler.js examples
+L’accesso è protetto da:
 
-# Installa cron job giornaliero alle 18:00
-node cron-scheduler.js install
+- verifica del secret del webhook Telegram;
+- whitelist `ALLOWED_CHAT_ID`;
+- token conservati come Cloudflare Worker secrets.
 
-# Installa cron job personalizzato
-node cron-scheduler.js install "0 9 1 * *"  # Primo del mese alle 9:00
+Per installazione, aggiornamenti, verifica dell’account e troubleshooting consulta [bot/README.md](./bot/README.md).
 
-# Test esecuzione
-node cron-scheduler.js test
-```
+## Schedulazione locale
 
-### Esempi di Schedulazione
-
-| Scenario | Cron Expression | Descrizione |
-|----------|----------------|-------------|
-| Giornaliero | `0 18 * * *` | Ogni giorno alle 18:00 |
-| Settimanale | `0 17 * * 5` | Ogni venerdì alle 17:00 |
-| Mensile | `0 9 1 * *` | Primo del mese alle 9:00 |
-| Orario lavorativo | `0 9,13,17 * * 1-5` | Ogni 4 ore, lun-ven |
-
-### Monitoraggio
+Mostra gli esempi disponibili:
 
 ```bash
-# Verifica cron jobs attivi
-crontab -l
-
-# Monitora log di esecuzione
-tail -f logs/cron_*.log
-
-# Rimuovi tutti i cron jobs
-crontab -r
+pnpm run cron -- examples
 ```
 
-## 🧪 Test
+Genera uno script e una voce crontab senza installarli:
 
 ```bash
-# Esegui tutti i test
-npm test
-
-# Test con debug
-DEBUG=true npm test
-
-# Test singolo
-node test.js
+pnpm run cron -- generate "0 9 1 * *"
 ```
 
-I test verificano:
-- Utility di date e validazione
-- Gestione file JSON/CSV
-- Connessione API (se configurata)
-- Performance delle funzioni
-- Integrazione completa (se configurata)
+Vengono creati `run_tracker.sh` e `crontab.txt`, entrambi ignorati da Git.
 
-## 🔍 Troubleshooting
+> Attenzione: il comando `cron install` usa `crontab crontab.txt` e sostituisce il crontab corrente. Prima di usarlo, salva `crontab -l` e integra manualmente la nuova voce se hai già altre attività pianificate.
 
-### Errori Comuni
-
-#### 🔑 Token non valido (401)
-```
-❌ HTTP 401: Invalid token
-```
-**Soluzione**: Verifica che il token inizi con `pk_` e sia valido in [ClickUp Settings](https://app.clickup.com/settings/apps)
-
-#### 🚫 Accesso negato (403)
-```
-❌ HTTP 403: Forbidden
-```
-**Soluzione**: Verifica che `TEAM_ID` e `USER_ID` siano corretti e che l'utente abbia accesso al team
-
-#### 📭 Risorsa non trovata (404)
-```
-❌ HTTP 404: Not Found
-```
-**Soluzione**: Controlla che `TEAM_ID` esista e che l'utente faccia parte del team
-
-#### ⏳ Rate limit superato (429)
-```
-❌ HTTP 429: Too Many Requests
-```
-**Soluzione**: Lo script gestisce automaticamente i rate limit. Attendi qualche minuto e riprova.
-
-#### 📅 Nessuna time entry trovata
-```
-⚠️  Nessuna time entry trovata per il periodo specificato
-```
-**Soluzione**: Verifica che `START_DATE` e `END_DATE` siano corretti e che esistano time entries nel periodo
-
-### Debug Mode
+## Test
 
 ```bash
-# Abilita log di debug
-DEBUG=true node index.js
-
-# Mostra chiamate API dettagliate
-DEBUG=true CLICKUP_TOKEN=pk_xxx node index.js
+pnpm test
 ```
 
-### Validazione Configurazione
+La suite verifica:
+
+- conversione e formattazione delle durate;
+- validazione della configurazione multi-workspace;
+- generazione coerente del file `.env`;
+- singola richiesta per intervallo all’API delle time entry;
+- scrittura JSON e CSV delle utility;
+- prestazioni delle funzioni di base.
+
+Se `.env` contiene `CLICKUP_TOKEN`, la suite esegue anche una chiamata autenticata in sola lettura per verificare il token.
+
+## Sicurezza e privacy
+
+- Non inserire token o chat ID nel codice o nei file tracciati.
+- Mantieni `.env` fuori da Git; è già incluso in `.gitignore`.
+- Su Cloudflare conserva token e identificativi come secret del Worker.
+- Non condividere i report JSON senza controllarne il contenuto.
+- Rigenera immediatamente un token ClickUp o Telegram se viene esposto.
+- Il repository non contiene i valori dei secret Cloudflare e non può recuperarli dopo il deploy.
+
+## Troubleshooting
+
+### Configurazione non valida
+
+Controlla che:
+
+- `CLICKUP_TOKEN` inizi con `pk_`;
+- `USER_ID` non sia vuoto;
+- `TEAM_IDS` contenga almeno un ID;
+- `HOURLY_RATE` sia un numero maggiore o uguale a zero.
+
+### Nessuna time entry
+
+Il report usa automaticamente l’intero mese precedente e l’intero mese corrente. Verifica che:
+
+- le time entry appartengano all’utente configurato;
+- il workspace corretto sia presente in `TEAM_IDS`;
+- il token abbia accesso al workspace;
+- non ci sia un timer ancora attivo.
+
+ClickUp rappresenta un timer attivo con una durata negativa; fermalo prima di generare il riepilogo.
+
+### Errori API
+
+- `401`: token assente o non valido.
+- `403`: token senza accesso al workspace.
+- `404`: workspace o risorsa non trovata.
+- `429`: limite di richieste raggiunto; il tracker applica un backoff automatico.
+
+I limiti ClickUp dipendono dal piano del workspace. Consulta la [documentazione ufficiale sui rate limit](https://developer.clickup.com/docs/rate-limits).
+
+### La tariffa locale è aggiornata ma Telegram mostra ancora il vecchio valore
+
+È normale se è stato modificato soltanto `.env`. Aggiorna separatamente `HOURLY_RATE` sul Worker Cloudflare e verifica di essere autenticato nell’account che contiene `clickup-summary-bot`.
+
+### Il Worker non compare su Cloudflare
+
+Verifica l’identità Wrangler:
 
 ```bash
-# Verifica configurazione
-node -e "
-import { ValidationUtils } from './utils.js';
-import dotenv from 'dotenv';
-dotenv.config();
-
-const config = {
-  CLICKUP_TOKEN: process.env.CLICKUP_TOKEN,
-  TEAM_ID: process.env.TEAM_ID,
-  USER_ID: process.env.USER_ID,
-  START_DATE: process.env.START_DATE || Date.now() - 86400000,
-  END_DATE: process.env.END_DATE || Date.now()
-};
-
-const validation = ValidationUtils.validateConfig(config);
-console.log('Validazione:', validation);
-"
+cd bot
+pnpm exec wrangler whoami
 ```
 
-## 📚 Documentazione API ClickUp
+Il nome atteso dal repository è `clickup-summary-bot`. Se non compare nell’account autenticato, il Worker potrebbe essere stato distribuito con un altro account, eliminato oppure mai pubblicato.
 
-### Endpoints Utilizzati
+## Struttura del progetto
 
-- **[Get Time Entries](https://clickup.com/api/clickupreference/operation/GetTimeEntries/)**: `GET /api/v2/team/{team_id}/time_entries`
-- **[Get User Info](https://clickup.com/api/clickupreference/operation/GetAuthorizedUser/)**: `GET /api/v2/user`
-- **[Get Team Info](https://clickup.com/api/clickupreference/operation/GetTeams/)**: `GET /api/v2/team`
-
-### Autenticazione
-
-```http
-Authorization: pk_your_token_here
-Content-Type: application/json
-```
-
-### Parametri Time Entries
-
-| Parametro | Tipo | Descrizione |
-|-----------|------|-------------|
-| `team_id` | string | ID del team/workspace |
-| `start_date` | number | Timestamp inizio (millisecondi) |
-| `end_date` | number | Timestamp fine (millisecondi) |
-| `assignee` | string | ID dell'utente |
-
-> ℹ️ Nota: l'endpoint `time_entries` di ClickUp ignora i parametri `page` / `page_size` e ritorna tutte le entries del range in un'unica risposta. Tentare di paginare causa duplicati.
-
-### Rate Limits
-
-- **Rate Limit**: 100 richieste per minuto
-- **Burst Limit**: 1000 richieste per ora
-- **Gestione**: Retry automatico con backoff esponenziale
-
-### Limiti API
-
-1. **Periodo**: Nessun limite ufficiale, ma performance migliori per periodi < 1 anno
-2. **Dati**: Time entries filtrabili solo per team, non per singolo progetto/task tramite API
-3. **Timestamp**: Deve essere in millisecondi UTC
-
-## 🛠️ Sviluppo
-
-### Struttura Progetto
-
-```
-clickup-time-tracker/
-├── index.js              # Script principale (CLI Node.js)
-├── setup.js              # Setup automatico team/user ID
-├── utils.js              # Funzioni utility
-├── cron-scheduler.js     # Gestione schedulazione
-├── test.js               # Test suite
-├── package.json          # Configurazione Node.js
-├── config.example.env    # Esempio configurazione
-├── bot/                  # Bot Telegram on-demand (Cloudflare Workers)
-│   ├── setup.sh          # Deploy + secrets + webhook in un solo script
-│   ├── wrangler.toml     # Config Cloudflare Workers
+```text
+monthly-time-tracker/
+├── index.js                  # CLI e generazione del report
+├── setup.js                  # Recupero utente e workspace ClickUp
+├── utils.js                  # Date, file, validazione, retry e logging
+├── cron-scheduler.js         # Generazione e installazione cron
+├── test.js                   # Suite di test
+├── clickupSummary.command    # Launcher macOS
+├── config.example.env        # Configurazione locale di esempio
+├── bot/
 │   ├── src/
-│   │   ├── index.js      # Entry: routing comandi + whitelist chat_id
-│   │   ├── clickup.js    # Client ClickUp API
-│   │   ├── format.js     # Formatter HTML per Telegram
-│   │   └── telegram.js   # Helper sendMessage
-│   └── README.md         # Istruzioni setup bot
-└── README.md             # Questo file
+│   │   ├── index.js          # Webhook e routing comandi Telegram
+│   │   ├── clickup.js        # Client ClickUp per Workers
+│   │   ├── format.js         # Formattazione HTML Telegram
+│   │   └── telegram.js       # Invio messaggi
+│   ├── setup.sh              # Deploy, secret e webhook iniziale
+│   ├── wrangler.toml         # Configurazione Cloudflare
+│   └── README.md             # Guida del bot
+├── package.json
+└── README.md
 ```
+
+## API e piattaforme
+
+- [Autenticazione ClickUp](https://developer.clickup.com/docs/authentication)
+- [Get time entries within a date range](https://developer.clickup.com/reference/gettimeentrieswithinadaterange)
+- [Rate limits ClickUp](https://developer.clickup.com/docs/rate-limits)
+- [Cloudflare Workers secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
+- [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
+- [Telegram Bot API](https://core.telegram.org/bots/api)
+
+## Licenza
+
+Distribuito con licenza MIT. Vedi [LICENSE](./LICENSE).

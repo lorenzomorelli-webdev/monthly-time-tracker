@@ -1,7 +1,7 @@
 {
   "name": "clickup-time-tracker",
   "version": "1.0.0",
-  "description": "Script per calcolare le ore tracciate su ClickUp in un intervallo temporale",
+  "description": "Generate monthly ClickUp time and billing reports from the CLI or Telegram.",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "cron": "node cron-scheduler.js",
     "debug": "DEBUG=true node index.js"
   },
-  "packageManager": "pnpm",
+  "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "dotenv": "^16.3.1",
     "node-fetch": "^3.3.2",
@@ -20,10 +20,20 @@
   "devDependencies": {
     "eslint": "^9.31.0"
   },
-  "keywords": ["clickup", "time-tracking", "nodejs", "api"],
+  "keywords": [
+    "automation",
+    "billing",
+    "clickup",
+    "cloudflare-workers",
+    "freelancer-tools",
+    "nodejs",
+    "reporting",
+    "telegram-bot",
+    "time-tracking"
+  ],
   "author": "Lorenzo Morelli",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   }
-} 
+}

@@ -19,7 +19,6 @@ import {
 dotenv.config();
 
 const API_BASE = 'https://api.clickup.com/api/v2';
-const DEFAULT_PAGE_SIZE = 100;
 
 class ClickUpMultiTeamTracker {
   constructor(config) {
@@ -54,42 +53,21 @@ class ClickUpMultiTeamTracker {
    * Ottiene le time entries per un singolo team
    */
   async getTeamTimeEntries(teamId, userId, startDate, endDate) {
-    let allEntries = [];
-    let page = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      try {
-        const url = `${API_BASE}/team/${teamId}/time_entries`;
-        const params = new URLSearchParams({
-          start_date: startDate.toString(),
-          end_date: endDate.toString(),
-          assignee: userId.toString(),
-          page: page.toString(),
-          page_size: DEFAULT_PAGE_SIZE.toString()
-        });
-
-        const response = await this.apiCall(`${url}?${params}`);
-        const entries = response.data || [];
-
-        if (entries.length === 0) {
-          hasMore = false;
-        } else {
-          allEntries = allEntries.concat(entries);
-          page++;
-          hasMore = entries.length === DEFAULT_PAGE_SIZE;
-        }
-
-        // Piccola pausa per evitare rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-      } catch (error) {
-        LoggerUtils.error(`Errore nel recupero entries per team ${teamId}:`, error.message);
-        throw error;
-      }
+    try {
+      const url = `${API_BASE}/team/${teamId}/time_entries`;
+      const params = new URLSearchParams({
+        start_date: startDate.toString(),
+        end_date: endDate.toString(),
+        assignee: userId.toString()
+      });
+      const response = await this.apiCall(`${url}?${params}`);
+      const entries = response.data || [];
+      LoggerUtils.debug(`Team ${teamId}: ${entries.length} time entry recuperate`);
+      return entries;
+    } catch (error) {
+      LoggerUtils.error(`Errore nel recupero entries per team ${teamId}:`, error.message);
+      throw error;
     }
-
-    return allEntries;
   }
 
   /**
@@ -595,4 +573,4 @@ if (import.meta.url.startsWith('file://') && process.argv[1].endsWith('index.js'
   runMultiTeamReport();
 }
 
-export default ClickUpMultiTeamTracker; 
+export default ClickUpMultiTeamTracker;
